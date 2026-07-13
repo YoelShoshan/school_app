@@ -213,13 +213,29 @@ function vialSVG(){
     <path d="M15 11h16v35a8 8 0 0 1-16 0z" fill="#0a1524" stroke="#2dd4bf" stroke-width="1.4" stroke-opacity=".7"/>
     <g clip-path="url(#vialclip)">
       <g class="liq">
-        <path d="M13 26q10 -5 20 0v22a10 10 0 0 1-20 0z" fill="url(#serumg)"/>
-        <ellipse cx="23" cy="26" rx="10" ry="2.4" fill="#a5f3fc" opacity=".85"/>
+        <rect x="14" y="27" width="18" height="21" fill="url(#serumg)"/>
       </g>
-      <circle class="bub" cx="20" cy="44" r="1.5" fill="#cffafe" style="animation-duration:3.2s"/>
-      <circle class="bub" cx="26" cy="46" r="1.1" fill="#cffafe" style="animation-duration:3.9s;animation-delay:1s"/>
-      <circle class="bub" cx="23" cy="42" r="1.8" fill="#e0fbff" style="animation-duration:3.5s;animation-delay:1.8s"/>
-      <circle class="bub" cx="18" cy="45" r="1" fill="#cffafe" style="animation-duration:4.2s;animation-delay:.4s"/>
+      <ellipse cx="23" cy="27" rx="9" ry="1.8" fill="#a5f3fc" opacity=".9"/>
+      <g class="bubbles">
+        <circle cx="21" r="1.4" fill="#cffafe">
+          <animate attributeName="cy" values="45;27" dur="3.6s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="0;.9;.9;0" keyTimes="0;.15;.85;1" dur="3.6s" repeatCount="indefinite"/>
+          <animate attributeName="r" values="0.7;1.4;1.2" keyTimes="0;.3;1" dur="3.6s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="25" r="1" fill="#cffafe">
+          <animate attributeName="cy" values="45;27" dur="4.4s" begin="1.3s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="0;.85;.85;0" keyTimes="0;.15;.85;1" dur="4.4s" begin="1.3s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="23" r="1.7" fill="#e0fbff">
+          <animate attributeName="cy" values="45;27" dur="4s" begin="2.2s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="0;.9;.9;0" keyTimes="0;.15;.85;1" dur="4s" begin="2.2s" repeatCount="indefinite"/>
+          <animate attributeName="r" values="0.8;1.7;1.4" keyTimes="0;.3;1" dur="4s" begin="2.2s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="19" r="0.9" fill="#cffafe">
+          <animate attributeName="cy" values="45;27" dur="4.8s" begin=".7s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="0;.8;.8;0" keyTimes="0;.15;.85;1" dur="4.8s" begin=".7s" repeatCount="indefinite"/>
+        </circle>
+      </g>
     </g>
     <path d="M15 11h16v35a8 8 0 0 1-16 0z" fill="url(#glassg)"/>
     <path d="M18 14v30" stroke="#ffffff" stroke-opacity=".4" stroke-width="1.6" stroke-linecap="round"/>
