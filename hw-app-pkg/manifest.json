@@ -1,0 +1,16 @@
+{
+  "name": "המשימות שלי",
+  "short_name": "משימות",
+  "description": "מעקב שיעורי בית, מבחנים ועבודות",
+  "start_url": "index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#14161c",
+  "theme_color": "#14161c",
+  "lang": "he",
+  "dir": "rtl",
+  "icons": [
+    {"src":"icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}
