@@ -29,6 +29,14 @@ const I = {
   language:'<path d="M4 5h8M8 3v2M6 5c0 4-2 7-4 8M7 5c0 3 2 6 4 7M13 20l4-9 4 9M14.5 16h5"/>',
 };
 const ICON_CHOICES = ['triangle','sigma','integral','atom','abc','letter','book','hourglass','scale','globe','dna','flask','microscope','feather','code','language'];
+
+/* ====== App name — change this one line to rename the app ====== */
+const APP_NAME = 'Skewl';   /* options you liked: 'SchoolNinja', 'SchoolHero', 'Skewl' */
+
+/* subject colors — value is the accent hex; the icon background is a soft tint of it */
+const COLORS = ['#7c9cff','#ff8f5e','#5bd6a0','#ffb454','#c77dff','#ff6b8a','#4fd0e3'];
+const DEFAULT_COLOR = '#7c9cff';
+const tint = hex => { const h=hex.replace('#',''); const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16); return `rgba(${r},${g},${b},.16)`; };
 const svg = (name, cls='') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${I[name]||''}</svg>`;
 
 const TYPES = [
@@ -99,10 +107,20 @@ function subjectIcon(name){
   const s = SUBJECTS.find(x=>x.name===name);
   return s ? s.icon : 'book';
 }
+function subjectColor(name){
+  const s = SUBJECTS.find(x=>x.name===name);
+  return (s && s.color) ? s.color : DEFAULT_COLOR;
+}
+function subjectTico(name, size){
+  const c = subjectColor(name);
+  const st = size ? `width:${size}px;height:${size}px;` : '';
+  return `<div class="tico" style="${st}background:${tint(c)};color:${c}">${svg(subjectIcon(name))}</div>`;
+}
 
 /* ---------- HOME ---------- */
 function Home(){
   const live = TASKS.filter(t=>!t.done).sort((a,b)=> new Date(a.finish)-new Date(b.finish));
+  const statusLine = homeStatus(live);
   let listHTML;
   if(live.length===0){
     listHTML = `<div class="empty">${svg('inbox')}<div>אין משימות קרובות.<br>הוסף משהו כשמקבלים אותו בכיתה.</div></div>`;
@@ -120,7 +138,7 @@ function Home(){
   const installHint = !window.matchMedia('(display-mode: standalone)').matches
     ? `<div class="installbar">${svg('download')}<div><b>התקן את האפליקציה:</b> בתפריט השיתוף בדפדפן בחר "הוסף למסך הבית".</div></div>` : '';
   return `<div class="screen">
-    ${header('השבועיים הקרובים',{gear:true})}
+    ${header(APP_NAME,{gear:true, sub:statusLine})}
     <div class="body">
       ${installHint}
       ${listHTML}
@@ -129,10 +147,22 @@ function Home(){
   </div>`;
 }
 
+function homeStatus(live){
+  const overdue = live.filter(t=>daysBetween(t.finish)<0).length;
+  const today = live.filter(t=>daysBetween(t.finish)===0).length;
+  if(live.length===0) return 'הכול רגוע — אין הגשות קרובות';
+  const parts=[];
+  if(today) parts.push(today===1?'משימה אחת להיום':`${today} משימות להיום`);
+  if(overdue) parts.push(overdue===1?'אחת עברה את הזמן':`${overdue} עברו את הזמן`);
+  if(parts.length) return parts.join(' · ');
+  const next = live[0]; const n = daysBetween(next.finish);
+  return n===1 ? 'הכי קרוב: מחר' : `הכי קרוב: בעוד ${n} ימים`;
+}
+
 function taskRow(t){
   const d = distLabel(t.finish); const m = typeMeta(t.type);
   return `<div class="task" onclick="go('detail',{id:'${t.id}'})">
-    <div class="tico">${svg(subjectIcon(t.subject))}</div>
+    ${subjectTico(t.subject)}
     <div class="tmid">
       <div class="tsub">${esc(t.subject)}</div>
       <div class="ttype">${m.label}</div>
@@ -148,10 +178,12 @@ function taskRow(t){
 function startAdd(){ draft={}; go('subject'); }
 
 function SubjectPick(){
-  const cards = SUBJECTS.map(s=>`
-    <button class="subcard" onclick="pickSubject('${esc(s.name).replace(/'/g,"\\'")}')">
-      ${svg(s.icon)}<span>${esc(s.name)}</span>
-    </button>`).join('');
+  const cards = SUBJECTS.map(s=>{
+    const c = s.color || DEFAULT_COLOR;
+    return `<button class="subcard" onclick="pickSubject('${esc(s.name).replace(/'/g,"\\'")}')">
+      <span style="color:${c}">${svg(s.icon)}</span><span>${esc(s.name)}</span>
+    </button>`;
+  }).join('');
   return `<div class="screen">
     ${header('איזה מקצוע?',{back:'home'})}
     <div class="body"><div class="pad"><div class="grid2">${cards}</div></div></div>
@@ -208,7 +240,7 @@ function Detail(){
     ${header('משימה',{back:'home'})}
     <div class="body">
       <div class="dhead">
-        <div class="tico">${svg(subjectIcon(t.subject))}</div>
+        <div class="tico" style="width:52px;height:52px;background:${tint(subjectColor(t.subject))};color:${subjectColor(t.subject)}">${svg(subjectIcon(t.subject))}</div>
         <div><div class="dsub">${esc(t.subject)}</div><div class="dtype">${m.label}</div></div>
       </div>
       <div class="drow"><span class="dk">${finishLabel(t.type)}</span><span class="dv">${fmtDate(t.finish)} · ${d.txt}</span></div>
@@ -231,7 +263,7 @@ async function delTask(id){ TASKS=TASKS.filter(x=>x.id!==id); await Store.saveTa
 function Settings(){
   const rows = SUBJECTS.map((s,i)=>`
     <div class="setrow">
-      <span class="sname">${svg(s.icon)}${esc(s.name)}</span>
+      <span class="sname"><span style="color:${s.color||DEFAULT_COLOR};display:grid;place-items:center">${svg(s.icon)}</span>${esc(s.name)}</span>
       <button class="iconbtn" onclick="removeSubject(${i})" aria-label="הסרה">${svg('trash')}</button>
     </div>`).join('');
   const doneCount = TASKS.filter(t=>t.done).length;
@@ -254,12 +286,13 @@ function Settings(){
   </div>`;
 }
 let pendingIcon = 'book';
+let pendingColor = DEFAULT_COLOR;
 function addSubject(){
   const el=document.getElementById('newsub'); const v=el.value.trim();
   if(!v) return;
-  SUBJECTS.push({name:v, icon:pendingIcon});
+  SUBJECTS.push({name:v, icon:pendingIcon, color:pendingColor});
   Store.saveSubjects(SUBJECTS);
-  pendingIcon='book'; render();
+  pendingIcon='book'; pendingColor=DEFAULT_COLOR; render();
 }
 function removeSubject(i){ SUBJECTS.splice(i,1); Store.saveSubjects(SUBJECTS); render(); }
 
@@ -292,14 +325,32 @@ function toast(msg){
 }
 
 /* render icon picker into settings when present */
+/* render color + icon pickers into settings when present */
 const _origRender = render;
 render = function(){
   _origRender();
   const wrap=document.getElementById('iconpickwrap');
   if(wrap){
-    wrap.innerHTML = `<div class="iconpick">${ICON_CHOICES.map(ic=>`<div class="iconopt ${ic===pendingIcon?'sel':''}" onclick="setPendingIcon('${ic}')">${svg(ic)}</div>`).join('')}</div>`;
+    const colors = COLORS.map(c=>`<div class="coloropt ${c===pendingColor?'sel':''}" onclick="setPendingColor('${c}')" style="background:${c}"></div>`).join('');
+    const icons = ICON_CHOICES.map(ic=>`<div class="iconopt ${ic===pendingIcon?'sel':''}" onclick="setPendingIcon('${ic}')" style="${ic===pendingIcon?`color:${pendingColor};border-color:${pendingColor}`:''}">${svg(ic)}</div>`).join('');
+    wrap.innerHTML = `
+      <div style="font-size:12px;color:var(--ink-dim);margin:2px 0 8px">צבע</div>
+      <div class="colorpick">${colors}</div>
+      <div style="font-size:12px;color:var(--ink-dim);margin:14px 0 8px">סמל</div>
+      <div class="iconpick">${icons}</div>`;
   }
 };
-function setPendingIcon(ic){ pendingIcon=ic; document.querySelectorAll('.iconopt').forEach(el=>el.classList.remove('sel')); event.currentTarget.classList.add('sel'); }
+function setPendingColor(c){
+  pendingColor=c;
+  document.querySelectorAll('.coloropt').forEach(el=>el.classList.remove('sel'));
+  event.currentTarget.classList.add('sel');
+  const sel=document.querySelector('.iconopt.sel');
+  if(sel){ sel.style.color=c; sel.style.borderColor=c; }
+}
+function setPendingIcon(ic){
+  pendingIcon=ic;
+  document.querySelectorAll('.iconopt').forEach(el=>{el.classList.remove('sel');el.style.color='';el.style.borderColor='';});
+  const el=event.currentTarget; el.classList.add('sel'); el.style.color=pendingColor; el.style.borderColor=pendingColor;
+}
 
 boot();

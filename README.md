@@ -54,3 +54,16 @@ is additive.
   service-worker push wiring; not included in this first version. The app currently
   reminds by grouping "עכשיו / השבוע / בהמשך" every time it opens.
 - **Board photos & notes with links:** designed-for (see above) but not built yet.
+
+## Renaming the app
+Change `APP_NAME` at the top of `app.js` (one line) — e.g. `'SchoolNinja'`,
+`'SchoolHero'`, or `'Skewl'`. Also update `name`/`short_name` in `manifest.json`
+so the home-screen icon label matches. The header shows this name plus a live
+status line ("2 משימות להיום · אחת עברה את הזמן", or "הכול רגוע" when nothing's due).
+
+## Subject color + icon
+Each subject has a color and an icon, both chosen when adding/editing it in
+settings. The color tints the subject everywhere it appears, so the list is
+scannable by color as well as icon shape. Custom photo upload per subject is
+deferred to the cloud-backend stage (same place board photos live), to avoid
+bloating on-device storage.
