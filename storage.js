@@ -9,7 +9,18 @@
 const Store = (() => {
   const KEY_TASKS = 'hw.tasks.v1';
   const KEY_SUBJECTS = 'hw.subjects.v1';
+  const KEY_SOURCES = 'hw.sources.v1';
   const KEY_SETTINGS = 'hw.settings.v1';
+  const KEY_LOG = 'hw.log.v1';
+  const LOG_CAP = 2000; // local safety cap; backend keeps the full history
+
+  const DEFAULT_SOURCES = [
+    {name:'Google Classroom', icon:'laptop', color:'#5bd6a0', url:'https://classroom.google.com'},
+    {name:'אתר בית הספר', icon:'globe', color:'#7c9cff', url:''},
+    {name:'וואטסאפ', icon:'quote', color:'#5bd6a0', url:''},
+    {name:'Google Drive', icon:'book', color:'#ffb454', url:'https://drive.google.com'},
+    {name:'מחברת', icon:'pen', color:'#c77dff', url:''},
+  ];
 
   const DEFAULT_SUBJECTS = [
     {name:'גיאומטריה', icon:'triangle', color:'#7c9cff'},
@@ -47,7 +58,29 @@ const Store = (() => {
     },
     async saveSubjects(subs){ write(KEY_SUBJECTS, subs); },
 
-    async getSettings(){ return read(KEY_SETTINGS, {reminderHour:16, keepHistory:true}); },
+    async getSources(){
+      const s = read(KEY_SOURCES, null);
+      if (s === null){ write(KEY_SOURCES, DEFAULT_SOURCES); return DEFAULT_SOURCES.slice(); }
+      return s;
+    },
+    async saveSources(src){ write(KEY_SOURCES, src); },
+
+    async getSettings(){ return read(KEY_SETTINGS, {theme:'auto', parentEmail:'', parentEmailVerified:false, dailySummary:true}); },
     async saveSettings(s){ write(KEY_SETTINGS, s); },
+
+    /*
+      Action log — append-only audit trail.
+      Each entry: {id, ts, event, taskId, data}
+      This is the exact shape the backend table will store. When the backend
+      lands, appendLog() posts to the server and getLog() reads from it; the
+      daily-summary job reads this same log server-side to build the email.
+    */
+    async appendLog(entry){
+      const log = read(KEY_LOG, []);
+      log.push(entry);
+      if (log.length > LOG_CAP) log.splice(0, log.length - LOG_CAP);
+      write(KEY_LOG, log);
+    },
+    async getLog(){ return read(KEY_LOG, []); },
   };
 })();

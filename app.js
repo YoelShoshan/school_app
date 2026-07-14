@@ -92,6 +92,7 @@ function distLabel(d){
 /* ---------- app state ---------- */
 let TASKS = [];
 let SUBJECTS = [];
+let SOURCES = [];
 let SETTINGS = {};
 let nav = {screen:'home'};
 let draft = {};
@@ -102,6 +103,7 @@ const esc = s => String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
 async function boot(){
   TASKS = await Store.getTasks();
   SUBJECTS = await Store.getSubjects();
+  SOURCES = await Store.getSources();
   SETTINGS = await Store.getSettings();
   applyTheme(SETTINGS.theme || 'auto');
   render();
@@ -121,9 +123,26 @@ async function setTheme(mode){
 
 function go(screen, extra={}){ nav = {screen, ...extra}; render(); }
 
+/* append an event to the action log, in the backend's shape */
+function logAction(event, task, extra={}){
+  const entry = {
+    id: newId(),
+    ts: Date.now(),
+    event,
+    taskId: task ? task.id : null,
+    data: Object.assign({
+      subject: task ? task.subject : undefined,
+      type: task ? task.type : undefined,
+      finish: task ? task.finish : undefined,
+      given: task ? task.given : undefined,
+    }, extra)
+  };
+  Store.appendLog(entry);
+}
+
 /* ---------- render ---------- */
 function render(){
-  const map = {home:Home, subject:SubjectPick, type:TypePick, date:DatePick, detail:Detail, settings:Settings, done:DoneHistory, editsub:EditSubject};
+  const map = {home:Home, subject:SubjectPick, type:TypePick, date:DatePick, detail:Detail, settings:Settings, done:DoneHistory, editsub:EditSubject, editsrc:EditSource, digest:DigestPreview};
   app.innerHTML = (map[nav.screen]||Home)();
   app.querySelector('.screen')?.classList.add('fade');
 }
@@ -321,6 +340,7 @@ async function commitTask(finishDate){
   const t = {id:newId(), subject:draft.subject, type:draft.type, given:toISO(TODAY), finish:toISO(finishDate), done:false, createdAt:Date.now()};
   TASKS.push(t);
   await Store.saveTasks(TASKS);
+  logAction('add', t);
   go('home'); toast('נוסף');
 }
 function saveTask(n){ commitTask(addDays(TODAY,n)); }
@@ -340,6 +360,17 @@ function Detail(){
   const t = TASKS.find(x=>x.id===nav.id);
   if(!t) return Home();
   const m = typeMeta(t.type); const d = distLabel(t.finish);
+  const chosen = t.sources || [];
+  const chips = SOURCES.map(s=>{
+    const on = chosen.includes(s.name);
+    const c = s.color || DEFAULT_COLOR;
+    return `<button class="srcchip ${on?'on':''}" style="${on?`border-color:${c};background:${tint(c)};color:${c}`:''}" onclick="toggleSource('${t.id}','${esc(s.name).replace(/'/g,"\\'")}')">
+      <span style="color:${on?c:'var(--ink-dim)'};display:grid;place-items:center">${svg(s.icon)}</span>${esc(s.name)}</button>`;
+  }).join('');
+  // any chosen source that has a URL gets an open link
+  const openable = SOURCES.filter(s=>chosen.includes(s.name) && s.url);
+  const openLinks = openable.length ? `<div class="opensrc">${openable.map(s=>`<a href="${esc(s.url)}" target="_blank" rel="noopener" class="openlink" style="color:${s.color||DEFAULT_COLOR}">${svg('globe')}פתיחת ${esc(s.name)}</a>`).join('')}</div>` : '';
+  const notes = t.notes || '';
   return `<div class="screen">
     ${header('משימה',{back:'home'})}
     <div class="body">
@@ -352,6 +383,26 @@ function Detail(){
         <span class="dv edit">${fmtDate(t.given)} <span class="hint">· שינוי</span>
           <input type="date" value="${toISO(t.given)}" onchange="if(this.value)editGiven('${t.id}',this.value)">
         </span></label>
+
+      <div class="sectlabel">איפה החומר?</div>
+      <div class="srcchips">${chips}</div>
+      ${openLinks}
+
+      <div class="sectlabel">פרטים והערות</div>
+      <div class="pad" style="padding-top:4px">
+        ${notes ? `
+          <div class="notesview" id="notesview">${linkify(notes)}</div>
+          <button class="btn ghost" style="margin-top:2px" onclick="startEditNotes('${t.id}')">${svg('pen')}עריכת ההערות</button>
+          <div id="noteseditor" style="display:none">
+            <textarea class="notesarea" id="notesarea" oninput="autoGrow(this)">${esc(notes)}</textarea>
+            <button class="btn ghost" style="margin-top:6px" onclick="saveNotes('${t.id}')">${svg('check')}שמירה</button>
+          </div>
+        ` : `
+          <textarea class="notesarea" id="notesarea" placeholder="קישור לחומר, מה צריך להכין, דגשים למבחן..." oninput="autoGrow(this)"></textarea>
+          <button class="btn ghost" style="margin-top:6px" onclick="saveNotes('${t.id}')">${svg('check')}שמירת הערות</button>
+        `}
+      </div>
+
       <div class="dactions">
         <button class="btn" onclick="markDone('${t.id}')">${svg('check')}סימון כבוצע</button>
         <button class="btn ghost" onclick="delTask('${t.id}')">מחיקת המשימה</button>
@@ -359,9 +410,84 @@ function Detail(){
     </div>
   </div>`;
 }
-async function markDone(id){ const t=TASKS.find(x=>x.id===id); if(t){t.done=true;t.doneAt=Date.now();} await Store.saveTasks(TASKS); go('home'); toast('כל הכבוד'); }
-async function editGiven(id,v){ const t=TASKS.find(x=>x.id===id); if(t)t.given=toISO(new Date(v+'T00:00:00')); await Store.saveTasks(TASKS); render(); }
-async function delTask(id){ TASKS=TASKS.filter(x=>x.id!==id); await Store.saveTasks(TASKS); go('home'); toast('נמחק'); }
+function linkify(text){
+  return esc(text).replace(/(https?:\/\/[^\s<]+)/g, u=>`<a href="${u}" target="_blank" rel="noopener">${u}</a>`).replace(/\n/g,'<br>');
+}
+async function toggleSource(id, name){
+  const t = TASKS.find(x=>x.id===id); if(!t) return;
+  t.sources = t.sources || [];
+  const i = t.sources.indexOf(name);
+  let added;
+  if(i>=0){ t.sources.splice(i,1); added=false; } else { t.sources.push(name); added=true; }
+  await Store.saveTasks(TASKS);
+  logAction(added?'source_add':'source_remove', t, {source:name});
+  render();
+}
+async function saveNotes(id){
+  const t = TASKS.find(x=>x.id===id); if(!t) return;
+  const had = !!(t.notes && t.notes.trim());
+  t.notes = document.getElementById('notesarea').value;
+  await Store.saveTasks(TASKS);
+  logAction(had?'notes_edit':'notes_add', t);
+  render(); toast('נשמר');
+}
+function autoGrow(el){ el.style.height='auto'; el.style.height=(el.scrollHeight)+'px'; }
+
+/*
+  buildDigest(dayStart, dayEnd) -> the object the daily email will render.
+  Server-side, the scheduled job will build this exact structure from the
+  synced log + tasks and email it to the parent. Here we build it locally so
+  the summary is previewable now.
+*/
+async function buildDigest(dayStart, dayEnd){
+  const log = await Store.getLog();
+  const inDay = log.filter(e => e.ts>=dayStart && e.ts<dayEnd);
+
+  // ---- ACTIONS TODAY (summarized: net changes, not every fiddle) ----
+  const added = inDay.filter(e=>e.event==='add');
+  const done = inDay.filter(e=>e.event==='done');
+  const deleted = inDay.filter(e=>e.event==='delete');
+  // for the assigned-vs-logged gap on things added today
+  const addedWithGap = added.map(e=>{
+    const gap = Math.round((midnight(new Date(e.data.finish)) - midnight(new Date(e.data.given)))/86400000);
+    return {subject:e.data.subject, type:e.data.type, finish:e.data.finish, sameDayLogged: true, gap};
+  });
+
+  // ---- STATUS NOW ----
+  const open = TASKS.filter(t=>!t.done);
+  const overdue = open.filter(t=>daysBetween(t.finish)<0)
+    .map(t=>({subject:t.subject, type:t.type, finish:t.finish, daysLate: -daysBetween(t.finish)}));
+  const dueTomorrow = open.filter(t=>daysBetween(t.finish)===1)
+    .map(t=>({subject:t.subject, type:t.type, finish:t.finish}));
+  const dueToday = open.filter(t=>daysBetween(t.finish)===0)
+    .map(t=>({subject:t.subject, type:t.type, finish:t.finish}));
+
+  return {
+    date: new Date(dayStart).toISOString().slice(0,10),
+    actions: {
+      addedCount: added.length,
+      doneCount: done.length,
+      deletedCount: deleted.length,
+      added: addedWithGap,
+      done: done.map(e=>({subject:e.data.subject, type:e.data.type})),
+    },
+    status: {
+      openCount: open.length,
+      overdue, dueToday, dueTomorrow,
+    }
+  };
+}
+function startEditNotes(id){
+  const view = document.getElementById('notesview');
+  const btn = view && view.nextElementSibling;
+  const editor = document.getElementById('noteseditor');
+  if(view) view.style.display='none';
+  if(btn) btn.style.display='none';
+  if(editor){ editor.style.display='block'; const ta=document.getElementById('notesarea'); autoGrow(ta); ta.focus(); }
+}
+async function markDone(id){ const t=TASKS.find(x=>x.id===id); if(t){t.done=true;t.doneAt=Date.now(); logAction('done', t);} await Store.saveTasks(TASKS); go('home'); toast('כל הכבוד'); }
+async function editGiven(id,v){ const t=TASKS.find(x=>x.id===id); if(t){const old=t.given; t.given=toISO(new Date(v+'T00:00:00')); logAction('edit_given', t, {from:old, to:t.given});} await Store.saveTasks(TASKS); render(); }
+async function delTask(id){ const t=TASKS.find(x=>x.id===id); if(t) logAction('delete', t); TASKS=TASKS.filter(x=>x.id!==id); await Store.saveTasks(TASKS); go('home'); toast('נמחק'); }
 
 /* ---------- SETTINGS ---------- */
 function Settings(){
@@ -371,6 +497,11 @@ function Settings(){
       <span class="dv" style="color:var(--ink-faint)">${svg('chevL')}</span>
     </div>`).join('');
   const doneCount = TASKS.filter(t=>t.done).length;
+  const srcRows = SOURCES.map((s,i)=>`
+    <div class="setrow" onclick="editSource(${i})" style="cursor:pointer">
+      <span class="sname"><span style="color:${s.color||DEFAULT_COLOR};display:grid;place-items:center">${svg(s.icon)}</span>${esc(s.name)}${s.url?`<span style="color:var(--ink-faint);font-weight:400;font-size:12px">מקושר</span>`:''}</span>
+      <span class="dv" style="color:var(--ink-faint)">${svg('chevL')}</span>
+    </div>`).join('');
   return `<div class="screen">
     ${header('הגדרות',{back:'home'})}
     <div class="body">
@@ -381,6 +512,11 @@ function Settings(){
       </div>
       <div id="iconpickwrap" style="padding:0 18px"></div>
       ${rows}
+      <div class="sectlabel">מקורות · "איפה החומר?"</div>
+      ${srcRows}
+      <div class="setrow" onclick="addSourceScreen()" style="cursor:pointer;color:var(--accent)">
+        <span class="sname"><span style="color:var(--accent);display:grid;place-items:center">${svg('plus')}</span>הוספת מקור</span>
+      </div>
       <div class="sectlabel">כללי</div>
       <div class="seg" role="group" aria-label="ערכת נושא">
         <button class="${(SETTINGS.theme||'auto')==='light'?'on':''}" onclick="setTheme('light')">בהיר</button>
@@ -391,9 +527,75 @@ function Settings(){
         <span class="sname">${svg('check')}משימות שבוצעו</span>
         <span class="dv" style="color:var(--ink-faint);font-weight:500">${doneCount} ${svg('chevL')}</span>
       </div>
+
+      <div class="sectlabel">חשבון וסנכרון</div>
+      ${accountSection()}
+
+      <div class="sectlabel">סיכום יומי להורה</div>
+      <div class="pad" style="padding-top:4px">
+        <div style="font-size:13px;color:var(--ink-dim);margin-bottom:10px;line-height:1.5">
+          מייל עם סיכום יומי (מה עשית היום ומה מצב המשימות) יישלח להורה. שבו יחד והזינו את הכתובת פעם אחת.
+        </div>
+        <input class="inp" id="parentemail" value="${esc(SETTINGS.parentEmail||'')}" placeholder="אימייל של הורה" dir="ltr" style="width:100%;margin-bottom:8px" inputmode="email">
+        <button class="btn ghost" onclick="saveParentEmail()">${svg('check')}שמירת כתובת</button>
+        ${SETTINGS.parentEmail ? `
+          <div style="font-size:12.5px;color:var(--ink-faint);margin-top:10px;display:flex;align-items:center;gap:6px">
+            ${SETTINGS.parentEmailVerified ? svg('check')+'הכתובת אושרה' : svg('clock')+'ממתין לאישור (כשהסנכרון יופעל)'}
+          </div>
+          <div style="font-size:12.5px;color:var(--ink-dim);margin-top:2px">סיכום יומי נשלח ל: <span dir="ltr">${esc(SETTINGS.parentEmail)}</span></div>
+        ` : ''}
+        <button class="btn ghost" style="margin-top:10px" onclick="go('digest')">${svg('quote')}תצוגה מקדימה של הסיכום</button>
+      </div>
     </div>
   </div>`;
 }
+async function saveParentEmail(){
+  const v = document.getElementById('parentemail').value.trim();
+  if(v && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ toast('כתובת לא תקינה'); return; }
+  SETTINGS.parentEmail = v;
+  SETTINGS.parentEmailVerified = false; // will require a confirm click once backend can send
+  await Store.saveSettings(SETTINGS);
+  render(); toast('נשמר');
+}
+
+function accountSection(){
+  // Sync not configured yet (config.js empty) — explain, stay local.
+  if(!Store.syncEnabled || !Store.syncEnabled()){
+    return `<div class="pad" style="padding-top:4px">
+      <div style="font-size:13px;color:var(--ink-dim);line-height:1.5">
+        הסנכרון עדיין לא מוגדר. האפליקציה עובדת מקומית במכשיר הזה. כשה־Supabase יחובר, אפשר יהיה להתחבר ולסנכרן בין מכשירים.
+      </div>
+    </div>`;
+  }
+  if(Store.isSignedIn && Store.isSignedIn()){
+    return `<div class="pad" style="padding-top:4px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="color:var(--green);display:grid;place-items:center">${svg('check')}</span>
+        <span style="font-size:14.5px">מחובר · הנתונים מסתנכרנים</span>
+      </div>
+      <button class="btn ghost" onclick="doSignOut()">התנתקות</button>
+    </div>`;
+  }
+  return `<div class="pad" style="padding-top:4px">
+    <div style="font-size:13px;color:var(--ink-dim);line-height:1.5;margin-bottom:12px">
+      התחבר כדי לשמור את הנתונים בענן ולסנכרן בין מכשירים (וכדי שהסיכום היומי יישלח).
+    </div>
+    <button class="btn" onclick="doSignInGoogle()">${svg('globe')}התחברות עם Google</button>
+  </div>`;
+}
+async function doSignInGoogle(){ if(Store.signInWithGoogle) await Store.signInWithGoogle(); }
+async function doSignOut(){ if(Store.signOut){ await Store.signOut(); render(); toast('התנתקת'); } }
+
+// Supabase layer calls these when auth changes or a sync completes.
+window.onAuthChanged = function(){ if(nav.screen==='settings') render(); };
+window.afterSync = async function(){
+  // remote data may have replaced local; refresh in-memory copies and re-render
+  TASKS = await Store.getTasks();
+  SUBJECTS = await Store.getSubjects();
+  SOURCES = await Store.getSources();
+  SETTINGS = await Store.getSettings();
+  render();
+};
 let pendingIcon = 'book';
 let pendingColor = DEFAULT_COLOR;
 function addSubject(){
@@ -449,6 +651,57 @@ async function removeSubjectAndBack(){
   go('settings'); toast('נמחק');
 }
 
+/* ---------- ADD / EDIT SOURCE ---------- */
+function addSourceScreen(){
+  pendingIcon='globe'; pendingColor=DEFAULT_COLOR;
+  go('editsrc',{srcIndex:-1});
+}
+function editSource(i){
+  const s = SOURCES[i];
+  pendingIcon = s.icon; pendingColor = s.color || DEFAULT_COLOR;
+  go('editsrc',{srcIndex:i});
+}
+function EditSource(){
+  const i = nav.srcIndex; const isNew = i<0;
+  const s = isNew ? {name:'',url:'',icon:'globe',color:DEFAULT_COLOR} : SOURCES[i];
+  return `<div class="screen">
+    ${header(isNew?'מקור חדש':'עריכת מקור',{back:'settings'})}
+    <div class="body">
+      <div class="pad">
+        <div style="font-size:12px;color:var(--ink-dim);margin:2px 0 8px">שם</div>
+        <input class="inp" id="srcname" value="${esc(s.name)}" placeholder="למשל: Google Classroom" style="width:100%;margin-bottom:14px">
+        <div style="font-size:12px;color:var(--ink-dim);margin:2px 0 8px">קישור (לא חובה)</div>
+        <input class="inp" id="srcurl" value="${esc(s.url||'')}" placeholder="https://..." dir="ltr" style="width:100%;margin-bottom:6px">
+        <div style="font-size:12px;color:var(--ink-faint);margin-bottom:4px">אם תוסיף קישור, לחיצה על המקור במשימה תוכל לפתוח אותו ישירות</div>
+        <div id="editpickwrap"></div>
+      </div>
+      <div class="dactions">
+        <button class="btn" onclick="saveSource()">${svg('check')}שמירה</button>
+        ${isNew?'':`<button class="btn ghost" onclick="removeSource()">מחיקת המקור</button>`}
+      </div>
+    </div>
+  </div>`;
+}
+async function saveSource(){
+  const name = document.getElementById('srcname').value.trim();
+  let url = document.getElementById('srcurl').value.trim();
+  if(!name) { toast('צריך שם'); return; }
+  if(url && !/^https?:\/\//i.test(url)) url = 'https://'+url;
+  const obj = {name, url, icon:pendingIcon, color:pendingColor};
+  if(nav.srcIndex<0) SOURCES.push(obj); else SOURCES[nav.srcIndex]=obj;
+  await Store.saveSources(SOURCES);
+  go('settings'); toast('נשמר');
+}
+async function removeSource(){
+  const removed = SOURCES[nav.srcIndex];
+  SOURCES.splice(nav.srcIndex,1);
+  await Store.saveSources(SOURCES);
+  // also untag it from any tasks
+  TASKS.forEach(t=>{ if(t.sources) t.sources = t.sources.filter(n=>n!==removed.name); });
+  await Store.saveTasks(TASKS);
+  go('settings'); toast('נמחק');
+}
+
 /* ---------- DONE HISTORY ---------- */
 function DoneHistory(){
   const done = TASKS.filter(t=>t.done).sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
@@ -466,6 +719,64 @@ function DoneHistory(){
     }).join('');
   }
   return `<div class="screen">${header('משימות שבוצעו',{back:'settings'})}<div class="body">${body}</div></div>`;
+}
+
+/* ---------- DIGEST PREVIEW (what the parent's daily email will contain) ---------- */
+function DigestPreview(){
+  // async fill
+  setTimeout(async ()=>{
+    const start = TODAY.getTime();
+    const end = start + 86400000;
+    const dg = await buildDigest(start, end);
+    const el = document.getElementById('digestbody');
+    if(el) el.innerHTML = renderDigest(dg);
+  },0);
+  return `<div class="screen">
+    ${header('הסיכום היומי',{back:'settings', sub:'כך ייראה המייל שיישלח להורה'})}
+    <div class="body"><div id="digestbody"><div class="empty">${svg('quote')}<div>בונה תצוגה…</div></div></div></div>
+  </div>`;
+}
+function renderDigest(dg){
+  const typeLabel = k => (TYPES.find(t=>t.k===k)||{}).label || k;
+  const line = (txt) => `<div style="font-size:14.5px;color:var(--ink);padding:6px 0;border-bottom:1px solid var(--line)">${txt}</div>`;
+  const gapText = g => g<0 ? `הוגדר להגשה ${-g} ימים לפני שהתקבל` : g===0 ? 'להגשה היום' : `${g} ימים עד ההגשה`;
+
+  let actionsHTML;
+  const a = dg.actions;
+  if(a.addedCount===0 && a.doneCount===0){
+    actionsHTML = `<div style="color:var(--ink-faint);font-size:14px;padding:6px 0">לא היו פעולות היום.</div>`;
+  } else {
+    actionsHTML = '';
+    if(a.addedCount) actionsHTML += `<div style="font-weight:600;font-size:13px;color:var(--ink-dim);margin:8px 0 2px">הוסיף (${a.addedCount}):</div>` +
+      a.added.map(x=>line(`${esc(x.subject)} · ${typeLabel(x.type)} — <span style="color:var(--ink-dim)">${gapText(x.gap)}</span>`)).join('');
+    if(a.doneCount) actionsHTML += `<div style="font-weight:600;font-size:13px;color:var(--ink-dim);margin:10px 0 2px">סימן כבוצע (${a.doneCount}):</div>` +
+      a.done.map(x=>line(`${esc(x.subject)} · ${typeLabel(x.type)}`)).join('');
+  }
+
+  const s = dg.status;
+  let statusHTML = '';
+  statusHTML += `<div style="font-weight:600;font-size:13px;color:var(--ink-dim);margin:8px 0 2px">פתוח כרגע: ${s.openCount}</div>`;
+  if(s.overdue.length) statusHTML += `<div style="font-weight:600;font-size:13px;color:var(--red);margin:10px 0 2px">עבר הזמן (${s.overdue.length}):</div>` +
+    s.overdue.map(x=>line(`${esc(x.subject)} · ${typeLabel(x.type)} — <span style="color:var(--red)">${x.daysLate} ימים באיחור</span>`)).join('');
+  if(s.dueToday.length) statusHTML += `<div style="font-weight:600;font-size:13px;color:var(--amber);margin:10px 0 2px">להיום (${s.dueToday.length}):</div>` +
+    s.dueToday.map(x=>line(`${esc(x.subject)} · ${typeLabel(x.type)}`)).join('');
+  if(s.dueTomorrow.length) statusHTML += `<div style="font-weight:600;font-size:13px;color:var(--amber);margin:10px 0 2px">למחר (${s.dueTomorrow.length}):</div>` +
+    s.dueTomorrow.map(x=>line(`${esc(x.subject)} · ${typeLabel(x.type)}`)).join('');
+  if(!s.overdue.length && !s.dueToday.length && !s.dueTomorrow.length) statusHTML += `<div style="color:var(--green);font-size:14px;padding:6px 0">אין משימות דחופות 👍</div>`;
+
+  const to = SETTINGS.parentEmail ? `<div style="font-size:12px;color:var(--ink-faint);margin-bottom:14px" dir="ltr">אל: ${esc(SETTINGS.parentEmail)}</div>` : `<div style="font-size:12.5px;color:var(--amber);margin-bottom:14px">עדיין לא הוגדרה כתובת הורה בהגדרות</div>`;
+
+  return `<div class="pad">
+    <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px">
+      <div style="font-weight:700;font-size:17px;margin-bottom:4px">Compound V — סיכום יומי</div>
+      <div style="font-size:12.5px;color:var(--ink-faint);margin-bottom:12px">${dg.date}</div>
+      ${to}
+      <div class="sectlabel" style="padding:0 0 4px">מה קרה היום</div>
+      ${actionsHTML}
+      <div class="sectlabel" style="padding:14px 0 4px">איפה הדברים עומדים</div>
+      ${statusHTML}
+    </div>
+  </div>`;
 }
 
 /* ---------- toast ---------- */

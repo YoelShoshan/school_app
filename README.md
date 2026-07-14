@@ -67,3 +67,42 @@ settings. The color tints the subject everywhere it appears, so the list is
 scannable by color as well as icon shape. Custom photo upload per subject is
 deferred to the cloud-backend stage (same place board photos live), to avoid
 bloating on-device storage.
+
+## Task content: sources + notes (added)
+Each task's detail screen now has:
+- **"איפה החומר?" source chips** — a one-tap row drawn from a global, configurable
+  source list (Google Classroom, school site, WhatsApp, Drive, notebook, etc.).
+  Tapping a chip tags where the material lives; if that source has a URL, an
+  "open" link appears. Manage the list in Settings → מקורות (add/edit/remove,
+  each with its own icon, color, and optional URL).
+- **Notes** — free text with auto-detected clickable links (paste a URL and it
+  becomes tappable). Edit via "עריכת ההערות".
+
+Sources are stored via `Store.getSources()/saveSources()` — same swappable pattern
+as everything else, ready for the cloud backend.
+
+## Still to come (need the cloud backend)
+- **Reminders** at set times (a closed web app can't self-wake without push infra).
+- **Image uploads** on a task (board photos, worksheets) — deferred to avoid
+  bloating on-device storage; belongs with sync.
+
+## Action log + daily parent summary (added, backend-shaped)
+- **Action log:** every meaningful event (add, done, date change, notes, source
+  tag, delete) is appended to an append-only log via `Store.appendLog()`, stored
+  in the exact shape the backend table will use: `{id, ts, event, taskId, data}`.
+  Full fidelity is kept; the daily email summarizes. Local cap ~2000 entries;
+  the backend keeps the complete history.
+- **Parent email** field in Settings (shown openly to the kid: "סיכום יומי נשלח
+  ל: ..."). Stored now; will require a one-time verification click once the
+  backend can send mail. `parentEmailVerified` flag is already in the model.
+- **Digest builder** (`buildDigest`) produces the exact object the daily email
+  will render — an "actions today" section (with assigned-vs-logged gaps) and a
+  "status now" section (overdue / due today / due tomorrow). Previewable in-app
+  via Settings → "תצוגה מקדימה של הסיכום".
+
+### What the backend needs to do (when it lands)
+1. Sync tasks/subjects/sources/settings/log per account.
+2. Verify the parent email (confirmation link).
+3. A daily scheduled job: build the digest server-side from the synced log +
+   tasks and email it to the verified parent address.
+Then: reminders (push), then image uploads.
