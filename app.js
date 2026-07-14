@@ -403,9 +403,9 @@ function Detail(){
         `}
       </div>
 
-      <div class="dactions">
-        <button class="btn" onclick="markDone('${t.id}')">${svg('check')}סימון כבוצע</button>
-        <button class="btn ghost" onclick="delTask('${t.id}')">מחיקת המשימה</button>
+      <div class="detailactions">
+        <button class="donebtn" onclick="markDone('${t.id}')">${svg('check')}<span>סמן כבוצע</span></button>
+        <button class="linkbtn" onclick="delTask('${t.id}')">מחיקת המשימה</button>
       </div>
     </div>
   </div>`;
