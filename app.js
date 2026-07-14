@@ -404,7 +404,9 @@ function Detail(){
       </div>
 
       <div class="detailactions">
-        <button class="donebtn" onclick="markDone('${t.id}')">${svg('check')}<span>סמן כבוצע</span></button>
+        <button class="donebtn" onclick="markDone('${t.id}')">${svg('check')}<span>סיימתי את המשימה</span></button>
+        <div class="donenote">המשימה תעבור ל"בוצע"</div>
+        <button class="backbtn" onclick="go('home')">${svg('chevR')}<span>חזרה למסך הראשי</span></button>
         <button class="linkbtn" onclick="delTask('${t.id}')">מחיקת המשימה</button>
       </div>
     </div>
