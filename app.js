@@ -533,6 +533,11 @@ function Settings(){
       <div class="sectlabel">חשבון וסנכרון</div>
       ${accountSection()}
 
+      <div class="sectlabel">תזכורות</div>
+      <div id="reminders-section" class="pad" style="padding-top:4px">
+        <div style="font-size:13px;color:var(--ink-dim)">טוען…</div>
+      </div>
+
       <div class="sectlabel">סיכום יומי להורה</div>
       <div class="pad" style="padding-top:4px">
         <div style="font-size:13px;color:var(--ink-dim);margin-bottom:10px;line-height:1.5">
@@ -796,7 +801,72 @@ render = function(){
   _origRender();
   const wrap = document.getElementById('iconpickwrap') || document.getElementById('editpickwrap');
   if(wrap){ wrap.innerHTML = pickerHTML(); }
+  const rem = document.getElementById('reminders-section');
+  if(rem){ fillReminders(rem); }
 };
+
+async function fillReminders(el){
+  if(!Store.pushSupported || !Store.pushSupported()){
+    el.innerHTML = `<div style="font-size:13px;color:var(--ink-dim);line-height:1.5">תזכורות יופעלו לאחר חיבור הסנכרון והתחברות. הן שולחות התראה לטלפון גם כשהאפליקציה סגורה.</div>`;
+    return;
+  }
+  if(!Store.isSignedIn || !Store.isSignedIn()){
+    el.innerHTML = `<div style="font-size:13px;color:var(--ink-dim);line-height:1.5">התחבר (למעלה) כדי להפעיל תזכורות.</div>`;
+    return;
+  }
+  const status = await Store.pushStatus();
+  if(status==='denied'){
+    el.innerHTML = `<div style="font-size:13px;color:var(--amber);line-height:1.5">ההתראות חסומות בהגדרות הדפדפן/הטלפון. יש לאשר התראות עבור האתר כדי להפעיל תזכורות.</div>`;
+    return;
+  }
+  const slots = SETTINGS.reminderSlots || {morning:true, afternoon:true, evening:true};
+  if(status==='on'){
+    const slotRow = (key, label, time) => `
+      <div class="setrow" style="cursor:pointer" onclick="toggleSlot('${key}')">
+        <span class="sname">${slots[key]!==false?`<span style="color:var(--green);display:grid;place-items:center">${svg('check')}</span>`:`<span style="color:var(--ink-faint);display:grid;place-items:center">${svg('clock')}</span>`}${label} · ${time}</span>
+        <span class="switch ${slots[key]!==false?'on':''}"></span>
+      </div>`;
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;padding:0 0 4px">
+        <span style="color:var(--green);display:grid;place-items:center">${svg('check')}</span>
+        <span style="font-size:14.5px">תזכורות פעילות</span>
+      </div>
+      <div style="font-size:12.5px;color:var(--ink-dim);margin-bottom:6px">שלוש תזכורות יומיות. אפשר לכבות כל אחת בנפרד:</div>
+      ${slotRow('morning','בוקר','07:15')}
+      ${slotRow('afternoon','צהריים','16:30')}
+      ${slotRow('evening','ערב','20:00')}
+      <button class="btn ghost" style="margin-top:14px" onclick="turnOffReminders()">כיבוי כל התזכורות</button>`;
+  } else {
+    el.innerHTML = `
+      <div style="font-size:13px;color:var(--ink-dim);line-height:1.5;margin-bottom:12px">
+        קבל תזכורות לטלפון (גם כשהאפליקציה סגורה): בוקר (07:15), צהריים (16:30) וערב (20:00), רק כשיש משהו לדווח.
+      </div>
+      <button class="btn" onclick="turnOnReminders()">${svg('clock')}הפעלת תזכורות</button>`;
+  }
+}
+async function turnOnReminders(){
+  try{
+    const slots = SETTINGS.reminderSlots || {morning:true, afternoon:true, evening:true};
+    await Store.enablePush(slots);
+    SETTINGS.reminderSlots = slots;
+    await Store.saveSettings(SETTINGS);
+    toast('תזכורות הופעלו'); render();
+  }catch(e){
+    const m = String(e.message||e);
+    if(m==='denied') toast('צריך לאשר התראות');
+    else if(m==='not-signed-in') toast('צריך להתחבר קודם');
+    else toast('לא ניתן להפעיל תזכורות');
+  }
+}
+async function turnOffReminders(){ await Store.disablePush(); toast('תזכורות כובו'); render(); }
+async function toggleSlot(key){
+  const slots = Object.assign({morning:true, afternoon:true, evening:true}, SETTINGS.reminderSlots||{});
+  slots[key] = slots[key]===false ? true : false;
+  SETTINGS.reminderSlots = slots;
+  await Store.saveSettings(SETTINGS);
+  if(Store.setReminderSlots) await Store.setReminderSlots(slots);
+  render();
+}
 function pickerHTML(){
   const colors = COLORS.map(c=>`<div class="coloropt ${c===pendingColor?'sel':''}" onclick="setPendingColor('${c}')" style="background:${c}"></div>`).join('');
   const icons = ICON_CHOICES.map(ic=>`<div class="iconopt ${ic===pendingIcon?'sel':''}" onclick="setPendingIcon('${ic}')" style="${ic===pendingIcon?`color:${pendingColor};border-color:${pendingColor}`:''}">${svg(ic)}</div>`).join('');

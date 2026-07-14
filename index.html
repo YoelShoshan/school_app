@@ -31,7 +31,29 @@ try{var s=JSON.parse(localStorage.getItem('hw.settings.v1')||'{}');if(s.theme&&s
 <script src="app.js"></script>
 <script>
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{}));
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      // When a new SW is found and installed, activate it and reload once.
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        if(!nw) return;
+        nw.addEventListener('statechange', () => {
+          if(nw.state === 'installed' && navigator.serviceWorker.controller){
+            nw.postMessage('skipWaiting');
+          }
+        });
+      });
+      // Check for updates on each load and periodically.
+      reg.update();
+      setInterval(()=>reg.update(), 60*1000);
+    }).catch(()=>{});
+
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if(reloaded) return; reloaded = true;
+      window.location.reload();
+    });
+  });
 }
 </script>
 </body>

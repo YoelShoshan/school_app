@@ -198,5 +198,82 @@ const Store = (() => {
 
     // let the app trigger a manual sync (e.g. pull-to-refresh) if desired
     async syncNow(){ await pullRemote(); await flush(); },
+
+    // ---------- push notifications (reminders) ----------
+    pushSupported(){
+      return !!(configured && cfg.vapidPublicKey && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window);
+    },
+    async pushStatus(){
+      if(!this.pushSupported()) return 'unsupported';
+      if(Notification.permission === 'denied') return 'denied';
+      try{
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        return sub ? 'on' : 'off';
+      }catch{ return 'off'; }
+    },
+    async enablePush(slots){
+      if(!this.pushSupported()) throw new Error('unsupported');
+      if(!userId) throw new Error('not-signed-in');
+      const perm = await Notification.requestPermission();
+      if(perm !== 'granted') throw new Error('denied');
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlB64ToUint8(cfg.vapidPublicKey),
+      });
+      const json = sub.toJSON();
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Jerusalem';
+      const s = slots || {};
+      await sb.from('push_subscriptions').upsert({
+        user_id: userId,
+        endpoint: json.endpoint,
+        p256dh: json.keys.p256dh,
+        auth: json.keys.auth,
+        reminder_tz: tz,
+        morning_enabled:   s.morning   !== false,
+        afternoon_enabled: s.afternoon !== false,
+        evening_enabled:   s.evening   !== false,
+        enabled: true,
+        updated_at: new Date().toISOString(),
+      }, {onConflict:'user_id,endpoint'});
+      return true;
+    },
+    async disablePush(){
+      try{
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if(sub){
+          const ep = sub.toJSON().endpoint;
+          if(sb && userId) await sb.from('push_subscriptions').delete().eq('user_id',userId).eq('endpoint',ep);
+          await sub.unsubscribe();
+        }
+      }catch{}
+      return true;
+    },
+    // update which of the three daily slots are on (obj: {morning,afternoon,evening} booleans)
+    async setReminderSlots(slots){
+      if(!sb || !userId) return;
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if(sub){
+        await sb.from('push_subscriptions').update({
+          morning_enabled:   slots.morning   !== false,
+          afternoon_enabled: slots.afternoon !== false,
+          evening_enabled:   slots.evening   !== false,
+          updated_at:new Date().toISOString()
+        }).eq('user_id',userId).eq('endpoint',sub.toJSON().endpoint);
+      }
+    },
   };
 })();
+
+// helper: convert base64url VAPID key to Uint8Array
+function urlB64ToUint8(base64String){
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++) arr[i]=raw.charCodeAt(i);
+  return arr;
+}
