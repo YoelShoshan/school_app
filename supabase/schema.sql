@@ -56,7 +56,77 @@ create policy "own log insert" on public.action_log
   for insert with check (auth.uid() = user_id);
 -- no update/delete policy: the log is append-only by design.
 
+-- ---------- push subscriptions (for reminders) ----------
+create table if not exists public.push_subscriptions (
+  user_id  uuid not null references auth.users(id) on delete cascade,
+  endpoint text not null,              -- browser push endpoint (unique per device)
+  p256dh   text not null,              -- subscription public key
+  auth     text not null,              -- subscription auth secret
+  reminder_tz text not null default 'Asia/Jerusalem',
+  -- three daily check-in slots; each can be toggled independently
+  morning_enabled   boolean not null default true,   -- ~07:15
+  afternoon_enabled boolean not null default true,   -- ~16:30
+  evening_enabled   boolean not null default true,   -- ~20:00
+  enabled boolean not null default true,             -- master on/off
+  updated_at timestamptz not null default now(),
+  primary key (user_id, endpoint)
+);
+
+create index if not exists push_sub_user on public.push_subscriptions (user_id);
+
+alter table public.push_subscriptions enable row level security;
+
+drop policy if exists "own push select" on public.push_subscriptions;
+create policy "own push select" on public.push_subscriptions
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "own push upsert" on public.push_subscriptions;
+create policy "own push upsert" on public.push_subscriptions
+  for insert with check (auth.uid() = user_id);
+
+drop policy if exists "own push update" on public.push_subscriptions;
+create policy "own push update" on public.push_subscriptions
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "own push delete" on public.push_subscriptions;
+create policy "own push delete" on public.push_subscriptions
+  for delete using (auth.uid() = user_id);
+
 -- ============================================================
 --  Done. The app's storage-supabase.js reads/writes these tables.
 --  The daily-digest job (built later) will read action_log server-side.
 -- ============================================================
+
+-- ============================================================
+--  Push subscriptions (for reminders) — added later
+--  Re-run this block in SQL Editor if you set up reminders.
+-- ============================================================
+create table if not exists public.push_subscriptions (
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  endpoint   text not null,
+  p256dh     text not null,
+  auth       text not null,
+  reminder_hour   int not null default 16,   -- local hour for the daily check-in
+  reminder_tz     text not null default 'Asia/Jerusalem',
+  enabled    boolean not null default true,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, endpoint)
+);
+
+alter table public.push_subscriptions enable row level security;
+
+drop policy if exists "own subs select" on public.push_subscriptions;
+create policy "own subs select" on public.push_subscriptions
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "own subs upsert" on public.push_subscriptions;
+create policy "own subs upsert" on public.push_subscriptions
+  for insert with check (auth.uid() = user_id);
+
+drop policy if exists "own subs update" on public.push_subscriptions;
+create policy "own subs update" on public.push_subscriptions
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "own subs delete" on public.push_subscriptions;
+create policy "own subs delete" on public.push_subscriptions
+  for delete using (auth.uid() = user_id);
