@@ -57,7 +57,7 @@ const ICON_CHOICES = ['triangle','sigma','integral','pi','calculator','compass',
 const APP_NAME = 'Compound V';   /* options you liked: 'SchoolNinja', 'SchoolHero', 'Skewl' */
 
 /* ====== Version — bump this on every release, and match CACHE in sw.js ====== */
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.5.1';
 
 /* subject colors — value is the accent hex; the icon background is a soft tint of it */
 const COLORS = ['#7c9cff','#ff8f5e','#5bd6a0','#ffb454','#c77dff','#ff6b8a','#4fd0e3'];
@@ -508,7 +508,7 @@ function Detail(){
       </div>
 
       <div class="detailactions">
-        <button class="donebtn" onclick="markDone('${t.id}')">${svg('check')}<span>סיימתי את המשימה</span></button>
+        <button class="donebtn" onclick="markDone('${t.id}')">${svg('check')}<span>המשימה הושלמה!</span></button>
         <div class="donenote">המשימה תעבור ל"בוצע"</div>
         <button class="backbtn" onclick="goBack()">${svg('chevR')}<span>חזרה למסך הראשי</span></button>
         <button class="linkbtn" onclick="delTask('${t.id}')">מחיקת המשימה</button>

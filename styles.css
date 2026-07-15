@@ -237,12 +237,12 @@ body{
 .detailactions{padding:22px 18px 28px;display:flex;flex-direction:column;gap:10px;align-items:center}
 .donebtn{
   display:inline-flex;align-items:center;justify-content:center;gap:7px;
-  border:1px solid var(--line-strong);background:transparent;color:var(--ink-dim);
+  border:1px solid var(--green);background:transparent;color:var(--green);
   font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;
   padding:8px 16px;border-radius:20px;transition:background .12s,transform .1s;
 }
 .donebtn svg{width:16px;height:16px}
-.donebtn:active{background:var(--surface-2);transform:scale(.97)}
+.donebtn:active{background:color-mix(in srgb,var(--green) 12%,transparent);transform:scale(.97)}
 .donenote{font-size:11.5px;color:var(--ink-faint);margin-top:-4px;margin-bottom:8px}
 .backbtn{
   width:100%;display:inline-flex;align-items:center;justify-content:center;gap:8px;
@@ -253,10 +253,10 @@ body{
 .backbtn svg{width:19px;height:19px}
 .backbtn:active{transform:scale(.98)}
 .linkbtn{
-  border:none;background:none;color:var(--ink-faint);font-family:inherit;
+  border:none;background:none;color:var(--red);font-family:inherit;
   font-size:13.5px;font-weight:500;cursor:pointer;padding:8px;margin-top:2px;
 }
-.linkbtn:active{color:var(--red)}
+.linkbtn:active{opacity:.7}
 
 /* source chips */
 .srcchips{display:flex;flex-wrap:wrap;gap:9px;padding:4px 18px 8px}
