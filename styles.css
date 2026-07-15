@@ -110,22 +110,21 @@ body{
 }
 .task .tico svg{width:22px;height:22px}
 .task .tmid{flex:1;min-width:0}
-.task .tsub{font-size:15.5px;font-weight:600;letter-spacing:-.01em}
-.task .ttype{font-size:13px;color:var(--ink-dim);margin-top:1px;display:flex;align-items:baseline;gap:6px;min-width:0}
-.task .ttypelabel{flex-shrink:0}
+.task .trow1{display:flex;align-items:center;gap:7px;min-width:0}
+.task .tsub{font-size:15px;font-weight:600;letter-spacing:-.01em;flex-shrink:0}
+.task .tsep{color:var(--ink-faint);font-size:12px;flex-shrink:0}
+.task .ttype{font-size:12.5px;color:var(--ink-dim);flex-shrink:0}
+.task .tdate{font-size:11.5px;color:var(--ink-faint);flex-shrink:0;margin-inline-start:auto}
 .task .tnote{
-  color:var(--ink-faint);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;
+  font-size:12.5px;color:var(--ink-faint);margin-top:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
-.task .tnote::before{content:"· "}
-.task .tright{text-align:start;white-space:nowrap;display:flex;flex-direction:column;align-items:flex-end;gap:3px}
 .pill{
-  font-size:12.5px;font-weight:600;padding:3.5px 11px;border-radius:20px;
-  background:var(--surface-2);color:var(--ink-dim);
+  font-size:11.5px;font-weight:600;padding:2.5px 9px;border-radius:20px;
+  background:var(--surface-2);color:var(--ink-dim);flex-shrink:0;
 }
 .pill.red{background:var(--red-bg);color:var(--red)}
 .pill.amber{background:var(--amber-bg);color:var(--amber)}
-.tdate{font-size:11px;color:var(--ink-faint)}
 
 /* empty */
 .empty{
