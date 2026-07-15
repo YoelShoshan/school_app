@@ -275,11 +275,17 @@ function homeStatus(live){
 
 function taskRow(t){
   const d = distLabel(t.finish); const m = typeMeta(t.type);
+  // If there's a note, show its first line next to the type — otherwise multiple
+  // "אלגברה · שיעורי בית" rows look identical and you can't tell them apart.
+  const note = (t.notes||'').trim().split('\n')[0].trim();
+  const sub = note
+    ? `<div class="ttype"><span class="ttypelabel">${m.label}</span><span class="tnote">${esc(note)}</span></div>`
+    : `<div class="ttype">${m.label}</div>`;
   return `<div class="task" onclick="go('detail',{id:'${t.id}'})">
     ${subjectTico(t.subject)}
     <div class="tmid">
       <div class="tsub">${esc(t.subject)}</div>
-      <div class="ttype">${m.label}</div>
+      ${sub}
     </div>
     <div class="tright">
       <span class="pill ${d.cls}">${d.txt}</span>
