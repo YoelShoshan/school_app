@@ -190,8 +190,15 @@ function Home(){
         ${arr.map(taskRow).join('')}
       </div>`).join('');
   }
+  // The install path differs by browser: iOS/Safari uses the Share menu,
+  // Chrome/Android (and desktop Chrome/Edge) use the three-dot menu.
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const installText = isIOS
+    ? `לחץ על כפתור השיתוף בדפדפן ואז בחר "הוסף למסך הבית".`
+    : `לחץ על 3 הנקודות בדפדפן למעלה ואז בחר "התקן אפליקציה" / "התקן למסך הבית".`;
   const installHint = !window.matchMedia('(display-mode: standalone)').matches
-    ? `<div class="installbar">${svg('download')}<div><b>התקן את האפליקציה:</b> בתפריט השיתוף בדפדפן בחר "הוסף למסך הבית".</div></div>` : '';
+    ? `<div class="installbar">${svg('download')}<div><b>התקן את האפליקציה:</b> ${installText}</div></div>` : '';
   return `<div class="screen">
     ${heroHeader(statusLine)}
     <div class="body">
