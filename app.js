@@ -57,7 +57,7 @@ const ICON_CHOICES = ['triangle','sigma','integral','pi','calculator','compass',
 const APP_NAME = 'Compound V';   /* options you liked: 'SchoolNinja', 'SchoolHero', 'Skewl' */
 
 /* ====== Version — bump this on every release, and match CACHE in sw.js ====== */
-const APP_VERSION = '1.3.1';
+const APP_VERSION = '1.4.0';
 
 /* subject colors — value is the accent hex; the icon background is a soft tint of it */
 const COLORS = ['#7c9cff','#ff8f5e','#5bd6a0','#ffb454','#c77dff','#ff6b8a','#4fd0e3'];
@@ -124,7 +124,73 @@ async function setTheme(mode){
   render();
 }
 
-function go(screen, extra={}){ nav = {screen, ...extra}; render(); }
+/*
+  Navigation + Android/browser back handling.
+
+  We keep our own screen stack. For the OS back button we use a single "sentinel"
+  history entry rather than trying to mirror the whole stack into history —
+  mirroring desyncs badly, because history.go(-n) does not reliably deliver n
+  popstate events, and the two stacks drift apart.
+
+  How it works: whenever we're above home, exactly one sentinel entry sits on the
+  history stack. An OS back press consumes it and fires popstate; we then pop our
+  own stack one level and immediately re-arm the sentinel if we're still above
+  home. At home there is no sentinel, so back exits the app — the expected
+  Android behaviour at the root.
+*/
+let navStack = [{screen:'home'}];
+let sentinelArmed = false;
+
+function armSentinel(){
+  if(!sentinelArmed){
+    try{ history.pushState({cv:true}, '', location.href.split('#')[0]); sentinelArmed = true; }catch(_){}
+  }
+}
+
+function go(screen, extra={}){
+  nav = {screen, ...extra};
+  navStack.push(nav);
+  armSentinel();
+  render();
+}
+
+// On-screen back buttons.
+function goBack(){
+  if(navStack.length > 1){
+    navStack.pop();
+    nav = navStack[navStack.length-1];
+    if(navStack.length === 1 && sentinelArmed){
+      // returning to home: consume our sentinel so OS-back exits from home
+      sentinelArmed = false;
+      try{ history.back(); }catch(_){}
+    }
+    render();
+  }
+}
+
+// After a completed action: collapse straight back to home.
+function goHomeReset(){
+  navStack = [{screen:'home'}];
+  nav = navStack[0];
+  if(sentinelArmed){
+    sentinelArmed = false;
+    try{ history.back(); }catch(_){}
+  }
+  render();
+}
+
+window.addEventListener('popstate', ()=>{
+  // Our sentinel was consumed by a real back press (or by our own history.back(),
+  // in which case sentinelArmed is already false and the UI is already correct).
+  if(!sentinelArmed) return;
+  sentinelArmed = false;
+  if(navStack.length > 1){
+    navStack.pop();
+    nav = navStack[navStack.length-1];
+    render();
+    if(navStack.length > 1) armSentinel();   // still above home: re-arm
+  }
+});
 
 /* append an event to the action log, in the backend's shape */
 function logAction(event, task, extra={}){
@@ -152,7 +218,7 @@ function render(){
 
 function header(title, {back=null, gear=false, sub=null}={}){
   return `<div class="hdr ${sub?'':'bordered'}">
-    ${back!==null?`<button class="iconbtn" onclick="go('${back}')" aria-label="חזרה">${svg('chevR')}</button>`:''}
+    ${back!==null?`<button class="iconbtn" onclick="goBack()" aria-label="חזרה">${svg('chevR')}</button>`:''}
     <div style="flex:1;min-width:0">
       <div class="ttl">${esc(title)}</div>
       ${sub?`<div class="sub">${esc(sub)}</div>`:''}
@@ -357,7 +423,7 @@ async function commitTask(finishDate){
   TASKS.push(t);
   await Store.saveTasks(TASKS);
   logAction('add', t);
-  go('home'); toast('נוסף');
+  goHomeReset(); toast('נוסף');
 }
 function saveTask(n){ commitTask(addDays(TODAY,n)); }
 function saveExact(v){ commitTask(new Date(v+'T00:00:00')); }
@@ -425,7 +491,7 @@ function Detail(){
       <div class="detailactions">
         <button class="donebtn" onclick="markDone('${t.id}')">${svg('check')}<span>סיימתי את המשימה</span></button>
         <div class="donenote">המשימה תעבור ל"בוצע"</div>
-        <button class="backbtn" onclick="go('home')">${svg('chevR')}<span>חזרה למסך הראשי</span></button>
+        <button class="backbtn" onclick="goBack()">${svg('chevR')}<span>חזרה למסך הראשי</span></button>
         <button class="linkbtn" onclick="delTask('${t.id}')">מחיקת המשימה</button>
       </div>
     </div>
@@ -506,7 +572,7 @@ function startEditNotes(id){
   if(btn) btn.style.display='none';
   if(editor){ editor.style.display='block'; const ta=document.getElementById('notesarea'); autoGrow(ta); ta.focus(); }
 }
-async function markDone(id){ const t=TASKS.find(x=>x.id===id); if(t){t.done=true;t.doneAt=Date.now(); logAction('done', t);} await Store.saveTasks(TASKS); go('home'); toast('כל הכבוד'); }
+async function markDone(id){ const t=TASKS.find(x=>x.id===id); if(t){t.done=true;t.doneAt=Date.now(); logAction('done', t);} await Store.saveTasks(TASKS); goHomeReset(); toast('כל הכבוד'); }
 async function editGiven(id,v){ const t=TASKS.find(x=>x.id===id); if(t){const old=t.given; t.given=toISO(new Date(v+'T00:00:00')); logAction('edit_given', t, {from:old, to:t.given});} await Store.saveTasks(TASKS); render(); }
 async function editFinish(id,v){
   const t=TASKS.find(x=>x.id===id);
@@ -527,7 +593,7 @@ function openGivenPicker(e){
   if(typeof inp.showPicker === 'function'){ try{ inp.showPicker(); e.preventDefault(); return; }catch(_){} }
   inp.focus(); inp.click();
 }
-async function delTask(id){ const t=TASKS.find(x=>x.id===id); if(t) logAction('delete', t); TASKS=TASKS.filter(x=>x.id!==id); await Store.saveTasks(TASKS); go('home'); toast('נמחק'); }
+async function delTask(id){ const t=TASKS.find(x=>x.id===id); if(t) logAction('delete', t); TASKS=TASKS.filter(x=>x.id!==id); await Store.saveTasks(TASKS); goHomeReset(); toast('נמחק'); }
 
 /* ---------- SETTINGS ---------- */
 function Settings(){
