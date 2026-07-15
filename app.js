@@ -57,7 +57,7 @@ const ICON_CHOICES = ['triangle','sigma','integral','pi','calculator','compass',
 const APP_NAME = 'Compound V';   /* options you liked: 'SchoolNinja', 'SchoolHero', 'Skewl' */
 
 /* ====== Version — bump this on every release, and match CACHE in sw.js ====== */
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 
 /* subject colors — value is the accent hex; the icon background is a soft tint of it */
 const COLORS = ['#7c9cff','#ff8f5e','#5bd6a0','#ffb454','#c77dff','#ff6b8a','#4fd0e3'];
@@ -569,8 +569,43 @@ function Settings(){
         ` : ''}
         <button class="btn ghost" style="margin-top:10px" onclick="go('digest')">${svg('quote')}תצוגה מקדימה של הסיכום</button>
       </div>
+
+      <div class="sectlabel">גרסה</div>
+      <div class="pad" style="padding-top:4px;padding-bottom:30px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <span style="font-size:14px;color:var(--ink-dim)">גרסה מותקנת</span>
+          <span style="font-size:14px;font-weight:600" dir="ltr">v${APP_VERSION}</span>
+        </div>
+        <button class="btn ghost" onclick="forceUpdate()">${svg('download')}בדיקת עדכון וריענון</button>
+        <div style="font-size:12px;color:var(--ink-faint);margin-top:8px;line-height:1.5">
+          מוריד את הגרסה האחרונה ומרענן. הנתונים נשמרים.
+        </div>
+      </div>
     </div>
   </div>`;
+}
+
+/*
+  Force-update: the service worker caches the app files, so a new deploy can keep
+  serving the old build until the cache turns over. This clears it deliberately:
+  unregister the SW, delete its caches, then hard-reload from the network.
+  Task data lives in localStorage (and the cloud), so it is NOT touched.
+*/
+async function forceUpdate(){
+  toast('מוריד עדכון…');
+  try{
+    if('serviceWorker' in navigator){
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r=>r.unregister()));
+    }
+    if(window.caches){
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k=>caches.delete(k)));
+    }
+  }catch(e){ /* proceed to reload regardless */ }
+  // cache-busting reload so the browser refetches index.html itself
+  const url = location.href.split('#')[0].split('?')[0] + '?u=' + Date.now();
+  location.replace(url);
 }
 async function saveParentEmail(){
   const v = document.getElementById('parentemail').value.trim();
