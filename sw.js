@@ -1,12 +1,22 @@
 // Bump this string on every deploy to force a fresh cache.
 // Keep this in sync with APP_VERSION in app.js — bumping it forces all clients
 // to fetch fresh files instead of serving the old cached build.
-const VERSION = '1.3.0';
+const VERSION = '1.3.1';
 const CACHE = 'compound-v-' + VERSION;
 const ASSETS = ['index.html','styles.css','config.js','storage-supabase.js','app.js','manifest.json','icon-192.png','icon-512.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(()=>self.skipWaiting()));
+  // cache:'reload' so a new SW version never populates its cache from stale
+  // HTTP-cached copies of the files.
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => Promise.all(ASSETS.map(a =>
+        fetch(new Request(a, {cache:'reload'}))
+          .then(res => res.ok ? c.put(a, res) : null)
+          .catch(()=>null)
+      )))
+      .then(()=>self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', e => {
@@ -29,8 +39,19 @@ self.addEventListener('fetch', e => {
 
   const isSameOrigin = url.startsWith(self.location.origin);
   if(isSameOrigin){
+    // IMPORTANT: cache:'reload' makes this bypass the browser's *HTTP* cache.
+    // Without it, a plain fetch() can be served a stale file by the HTTP cache
+    // even though we're "network-first" — which is how an installed PWA can keep
+    // showing an old build no matter how many times you clear the SW caches.
+    const req = new Request(e.request.url, {
+      cache: 'reload',
+      credentials: 'same-origin',
+      headers: e.request.headers,
+      mode: e.request.mode === 'navigate' ? 'same-origin' : e.request.mode,
+      redirect: 'follow',
+    });
     e.respondWith(
-      fetch(e.request).then(res=>{
+      fetch(req).then(res=>{
         const copy=res.clone();
         caches.open(CACHE).then(c=>c.put(e.request,copy)).catch(()=>{});
         return res;

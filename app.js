@@ -57,7 +57,7 @@ const ICON_CHOICES = ['triangle','sigma','integral','pi','calculator','compass',
 const APP_NAME = 'Compound V';   /* options you liked: 'SchoolNinja', 'SchoolHero', 'Skewl' */
 
 /* ====== Version — bump this on every release, and match CACHE in sw.js ====== */
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.3.1';
 
 /* subject colors — value is the accent hex; the icon background is a soft tint of it */
 const COLORS = ['#7c9cff','#ff8f5e','#5bd6a0','#ffb454','#c77dff','#ff6b8a','#4fd0e3'];
@@ -624,6 +624,10 @@ async function forceUpdate(){
       const keys = await caches.keys();
       await Promise.all(keys.map(k=>caches.delete(k)));
     }
+    // Also punch through the browser's HTTP cache for the core files — clearing
+    // SW caches alone isn't enough if the HTTP cache still holds old copies.
+    await Promise.all(['index.html','app.js','styles.css','storage-supabase.js','config.js','sw.js']
+      .map(f => fetch(f + '?cb=' + Date.now(), {cache:'reload'}).catch(()=>null)));
   }catch(e){ /* proceed to reload regardless */ }
   // cache-busting reload so the browser refetches index.html itself
   const url = location.href.split('#')[0].split('?')[0] + '?u=' + Date.now();
