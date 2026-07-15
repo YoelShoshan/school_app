@@ -225,7 +225,7 @@ body{
 .drow .dv{font-size:15px;font-weight:600}
 .drow .dv.edit{color:var(--accent);position:relative;cursor:pointer}
 .drow .dv .hint{color:var(--ink-faint);font-weight:400;font-size:13px}
-.drow .dv input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.drow .dv input{position:absolute;left:0;bottom:0;width:1px;height:1px;opacity:0;border:0;padding:0;pointer-events:none}
 .dactions{padding:22px 18px;display:flex;flex-direction:column;gap:10px}
 .detailactions{padding:22px 18px 28px;display:flex;flex-direction:column;gap:10px;align-items:center}
 .donebtn{

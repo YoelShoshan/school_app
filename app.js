@@ -57,7 +57,7 @@ const ICON_CHOICES = ['triangle','sigma','integral','pi','calculator','compass',
 const APP_NAME = 'Compound V';   /* options you liked: 'SchoolNinja', 'SchoolHero', 'Skewl' */
 
 /* ====== Version — bump this on every release, and match CACHE in sw.js ====== */
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 
 /* subject colors — value is the accent hex; the icon background is a soft tint of it */
 const COLORS = ['#7c9cff','#ff8f5e','#5bd6a0','#ffb454','#c77dff','#ff6b8a','#4fd0e3'];
@@ -394,11 +394,14 @@ function Detail(){
         <div class="tico" style="width:52px;height:52px;background:${tint(subjectColor(t.subject))};color:${subjectColor(t.subject)}">${svg(subjectIcon(t.subject))}</div>
         <div><div class="dsub">${esc(t.subject)}</div><div class="dtype">${m.label}</div></div>
       </div>
-      <div class="drow"><span class="dk">${finishLabel(t.type)}</span><span class="dv">${fmtDate(t.finish)} · ${d.txt}</span></div>
-      <label class="drow"><span class="dk">תאריך קבלה</span>
-        <span class="dv edit">${fmtDate(t.given)} <span class="hint">· שינוי</span>
-          <input type="date" value="${toISO(t.given)}" onchange="if(this.value)editGiven('${t.id}',this.value)">
-        </span></label>
+      <div class="drow"><span class="dk">${finishLabel(t.type)}</span>
+        <span class="dv edit" onclick="openFinishPicker(event)">${fmtDate(t.finish)} · ${d.txt} <span class="hint">· שינוי</span>
+          <input type="date" id="finishdate" value="${toISO(t.finish)}" onchange="if(this.value)editFinish('${t.id}',this.value)">
+        </span></div>
+      <div class="drow"><span class="dk">תאריך קבלה</span>
+        <span class="dv edit" onclick="openGivenPicker(event)">${fmtDate(t.given)} <span class="hint">· שינוי</span>
+          <input type="date" id="givendate" value="${toISO(t.given)}" onchange="if(this.value)editGiven('${t.id}',this.value)">
+        </span></div>
 
       <div class="sectlabel">איפה החומר?</div>
       <div class="srcchips">${chips}</div>
@@ -505,6 +508,25 @@ function startEditNotes(id){
 }
 async function markDone(id){ const t=TASKS.find(x=>x.id===id); if(t){t.done=true;t.doneAt=Date.now(); logAction('done', t);} await Store.saveTasks(TASKS); go('home'); toast('כל הכבוד'); }
 async function editGiven(id,v){ const t=TASKS.find(x=>x.id===id); if(t){const old=t.given; t.given=toISO(new Date(v+'T00:00:00')); logAction('edit_given', t, {from:old, to:t.given});} await Store.saveTasks(TASKS); render(); }
+async function editFinish(id,v){
+  const t=TASKS.find(x=>x.id===id);
+  if(t){ const old=t.finish; t.finish=toISO(new Date(v+'T00:00:00')); logAction('edit_finish', t, {from:old, to:t.finish}); }
+  await Store.saveTasks(TASKS); render(); toast('התאריך עודכן');
+}
+// hidden-input date pickers need showPicker(); a bare click on a transparent
+// input doesn't reliably open the native picker (esp. desktop Chrome).
+function openFinishPicker(e){
+  const inp = document.getElementById('finishdate');
+  if(!inp) return;
+  if(typeof inp.showPicker === 'function'){ try{ inp.showPicker(); e.preventDefault(); return; }catch(_){} }
+  inp.focus(); inp.click();
+}
+function openGivenPicker(e){
+  const inp = document.getElementById('givendate');
+  if(!inp) return;
+  if(typeof inp.showPicker === 'function'){ try{ inp.showPicker(); e.preventDefault(); return; }catch(_){} }
+  inp.focus(); inp.click();
+}
 async function delTask(id){ const t=TASKS.find(x=>x.id===id); if(t) logAction('delete', t); TASKS=TASKS.filter(x=>x.id!==id); await Store.saveTasks(TASKS); go('home'); toast('נמחק'); }
 
 /* ---------- SETTINGS ---------- */
