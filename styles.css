@@ -227,6 +227,13 @@ body{
 .drow .dv .hint{color:var(--ink-faint);font-weight:400;font-size:13px}
 .drow .dv input{position:absolute;left:0;bottom:0;width:1px;height:1px;opacity:0;border:0;padding:0;pointer-events:none}
 .dactions{padding:22px 18px;display:flex;flex-direction:column;gap:10px}
+.freshbar{
+  display:flex;align-items:center;gap:9px;margin:12px 18px 4px;padding:11px 13px;
+  background:color-mix(in srgb,var(--green) 12%,transparent);
+  border:1px solid color-mix(in srgb,var(--green) 35%,transparent);
+  border-radius:var(--radius-sm);color:var(--green);font-size:13px;font-weight:500;line-height:1.4;
+}
+.freshbar svg{width:17px;height:17px;flex-shrink:0}
 .detailactions{padding:22px 18px 28px;display:flex;flex-direction:column;gap:10px;align-items:center}
 .donebtn{
   display:inline-flex;align-items:center;justify-content:center;gap:7px;

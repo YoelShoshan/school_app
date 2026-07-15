@@ -57,7 +57,7 @@ const ICON_CHOICES = ['triangle','sigma','integral','pi','calculator','compass',
 const APP_NAME = 'Compound V';   /* options you liked: 'SchoolNinja', 'SchoolHero', 'Skewl' */
 
 /* ====== Version — bump this on every release, and match CACHE in sw.js ====== */
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.5.0';
 
 /* subject colors — value is the accent hex; the icon background is a soft tint of it */
 const COLORS = ['#7c9cff','#ff8f5e','#5bd6a0','#ffb454','#c77dff','#ff6b8a','#4fd0e3'];
@@ -214,6 +214,13 @@ function render(){
   const map = {home:Home, subject:SubjectPick, type:TypePick, date:DatePick, detail:Detail, settings:Settings, done:DoneHistory, editsub:EditSubject, editsrc:EditSource, digest:DigestPreview};
   app.innerHTML = (map[nav.screen]||Home)();
   app.querySelector('.screen')?.classList.add('fade');
+  // Landing on a just-added task: put the cursor in the note field so he can
+  // type straight away (or just tap back — nothing is required).
+  if(nav.screen==='detail' && nav.fresh){
+    const ta = document.getElementById('notesarea');
+    if(ta){ ta.focus({preventScroll:false}); }
+    nav.fresh = false;   // only auto-focus once, not on every re-render
+  }
 }
 
 function header(title, {back=null, gear=false, sub=null}={}){
@@ -423,7 +430,17 @@ async function commitTask(finishDate){
   TASKS.push(t);
   await Store.saveTasks(TASKS);
   logAction('add', t);
-  goHomeReset(); toast('נוסף');
+  // Land on the new task's detail so the note can be written straight away —
+  // notes now show on the home rows, so they're worth inviting.
+  // Collapse the add-flow stack to [home, detail] so back from here goes home
+  // rather than replaying subject/type/date. We reuse the sentinel that's
+  // already armed (do NOT history.back() here — its popstate is async and
+  // would race with the render, bouncing us off the detail screen).
+  nav = {screen:'detail', id:t.id, fresh:true};
+  navStack = [{screen:'home'}, nav];
+  render();
+  // no toast here — the on-screen banner already confirms the save, and the
+  // toast overlapped the buttons.
 }
 function saveTask(n){ commitTask(addDays(TODAY,n)); }
 function saveExact(v){ commitTask(new Date(v+'T00:00:00')); }
@@ -453,9 +470,11 @@ function Detail(){
   const openable = SOURCES.filter(s=>chosen.includes(s.name) && s.url);
   const openLinks = openable.length ? `<div class="opensrc">${openable.map(s=>`<a href="${esc(s.url)}" target="_blank" rel="noopener" class="openlink" style="color:${s.color||DEFAULT_COLOR}">${svg('globe')}פתיחת ${esc(s.name)}</a>`).join('')}</div>` : '';
   const notes = t.notes || '';
+  const freshBanner = nav.fresh ? `<div class="freshbar">${svg('check')}<span>המשימה נשמרה. אפשר להוסיף פרטים, או לחזור למסך הראשי.</span></div>` : '';
   return `<div class="screen">
     ${header('משימה',{back:'home'})}
     <div class="body">
+      ${freshBanner}
       <div class="dhead">
         <div class="tico" style="width:52px;height:52px;background:${tint(subjectColor(t.subject))};color:${subjectColor(t.subject)}">${svg(subjectIcon(t.subject))}</div>
         <div><div class="dsub">${esc(t.subject)}</div><div class="dtype">${m.label}</div></div>
