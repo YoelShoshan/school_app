@@ -57,7 +57,7 @@ const ICON_CHOICES = ['triangle','sigma','integral','pi','calculator','compass',
 const APP_NAME = 'Compound V';   /* options you liked: 'SchoolNinja', 'SchoolHero', 'Skewl' */
 
 /* ====== Version — bump this on every release, and match CACHE in sw.js ====== */
-const APP_VERSION = '1.5.1';
+const APP_VERSION = '1.6.0';
 
 /* subject colors — value is the accent hex; the icon background is a soft tint of it */
 const COLORS = ['#7c9cff','#ff8f5e','#5bd6a0','#ffb454','#c77dff','#ff6b8a','#4fd0e3'];
@@ -508,10 +508,12 @@ function Detail(){
       </div>
 
       <div class="detailactions">
+        <button class="backbtn" onclick="goBack()">${svg('chevR')}<span>חזרה למסך הראשי</span></button>
         <button class="donebtn" onclick="markDone('${t.id}')">${svg('check')}<span>המשימה הושלמה!</span></button>
         <div class="donenote">המשימה תעבור ל"בוצע"</div>
-        <button class="backbtn" onclick="goBack()">${svg('chevR')}<span>חזרה למסך הראשי</span></button>
-        <button class="linkbtn" onclick="delTask('${t.id}')">מחיקת המשימה</button>
+        <div class="dangerzone">
+          <button class="linkbtn" onclick="askDelete('${t.id}')">מחיקת המשימה</button>
+        </div>
       </div>
     </div>
   </div>`;
@@ -612,6 +614,33 @@ function openGivenPicker(e){
   if(typeof inp.showPicker === 'function'){ try{ inp.showPicker(); e.preventDefault(); return; }catch(_){} }
   inp.focus(); inp.click();
 }
+/*
+  Deletion is the only irreversible action in the app and sits near other
+  buttons, so it always asks first and names the task — an accidental tap
+  should never lose his record. It also points out that "completed" is usually
+  what he wants instead, since that keeps the task in history.
+*/
+function askDelete(id){
+  const t = TASKS.find(x=>x.id===id); if(!t) return;
+  const m = typeMeta(t.type);
+  const wrap = document.createElement('div');
+  wrap.className = 'modalwrap';
+  wrap.innerHTML = `
+    <div class="modal">
+      <div class="modaltitle">למחוק את המשימה?</div>
+      <div class="modalbody"><b>${esc(t.subject)}</b> · ${m.label}<br>
+        <span style="color:var(--ink-faint);font-size:13px">${fmtDate(t.finish)}</span></div>
+      <div class="modalnote">אי אפשר לבטל מחיקה. אם סיימת אותה — עדיף "המשימה הושלמה!", כך היא נשמרת בהיסטוריה.</div>
+      <div class="modalbtns">
+        <button class="mbtn cancel" onclick="closeModal()">ביטול</button>
+        <button class="mbtn danger" onclick="confirmDelete('${t.id}')">מחיקה</button>
+      </div>
+    </div>`;
+  wrap.onclick = (e)=>{ if(e.target===wrap) closeModal(); };
+  document.body.appendChild(wrap);
+}
+function closeModal(){ const m=document.querySelector('.modalwrap'); if(m) m.remove(); }
+async function confirmDelete(id){ closeModal(); await delTask(id); }
 async function delTask(id){ const t=TASKS.find(x=>x.id===id); if(t) logAction('delete', t); TASKS=TASKS.filter(x=>x.id!==id); await Store.saveTasks(TASKS); goHomeReset(); toast('נמחק'); }
 
 /* ---------- SETTINGS ---------- */

@@ -258,6 +258,38 @@ body{
 }
 .linkbtn:active{opacity:.7}
 
+/* separate destructive action from the rest so it can't be hit by reflex */
+.dangerzone{
+  margin-top:34px;padding-top:16px;width:100%;
+  border-top:1px solid var(--line);
+  display:flex;justify-content:center;
+}
+
+/* confirmation dialog */
+.modalwrap{
+  position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(2px);
+  display:grid;place-items:center;z-index:100;padding:24px;
+  animation:mfade .12s ease-out;
+}
+@keyframes mfade{from{opacity:0}to{opacity:1}}
+.modal{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:20px;max-width:340px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5);
+  animation:mpop .14s ease-out;
+}
+@keyframes mpop{from{transform:scale(.94);opacity:0}to{transform:scale(1);opacity:1}}
+.modaltitle{font-size:17px;font-weight:700;margin-bottom:10px}
+.modalbody{font-size:15px;line-height:1.5;margin-bottom:12px}
+.modalnote{font-size:12.5px;color:var(--ink-dim);line-height:1.5;margin-bottom:18px}
+.modalbtns{display:flex;gap:10px}
+.mbtn{
+  flex:1;padding:12px;border-radius:var(--radius-sm);font-family:inherit;
+  font-size:15px;font-weight:600;cursor:pointer;border:1px solid var(--line);
+}
+.mbtn.cancel{background:var(--surface-2);color:var(--ink)}
+.mbtn.danger{background:var(--red);color:#fff;border-color:var(--red)}
+.mbtn:active{transform:scale(.97)}
+
 /* source chips */
 .srcchips{display:flex;flex-wrap:wrap;gap:9px;padding:4px 18px 8px}
 .srcchip{
