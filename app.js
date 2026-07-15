@@ -56,6 +56,9 @@ const ICON_CHOICES = ['triangle','sigma','integral','pi','calculator','compass',
 /* ====== App name — change this one line to rename the app ====== */
 const APP_NAME = 'Compound V';   /* options you liked: 'SchoolNinja', 'SchoolHero', 'Skewl' */
 
+/* ====== Version — bump this on every release, and match CACHE in sw.js ====== */
+const APP_VERSION = '1.1.0';
+
 /* subject colors — value is the accent hex; the icon background is a soft tint of it */
 const COLORS = ['#7c9cff','#ff8f5e','#5bd6a0','#ffb454','#c77dff','#ff6b8a','#4fd0e3'];
 const DEFAULT_COLOR = '#7c9cff';
@@ -220,6 +223,7 @@ function heroHeader(statusLine){
         <div class="cvsub">${esc(statusLine)}</div>
       </div>
     </div>
+    <div class="cvver">v${APP_VERSION}</div>
   </div>`;
 }
 
