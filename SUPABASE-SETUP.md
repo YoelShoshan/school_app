@@ -85,3 +85,26 @@ Tell me which step and what you see. Common ones:
   URL in step 4 doesn't match where the app is actually served.
 - "Data doesn't sync" → check the two keys in `config.js` match Project Settings
   → API exactly.
+
+---
+
+## Task images (added in v1.7.0)
+Photos of the board / worksheets can be attached to a task (up to 5 each).
+
+**One setup step:** re-run `supabase/schema.sql` in the SQL Editor. It now also
+creates the private `task-images` storage bucket and its security policies
+(each user can only read/write files under their own user-id folder). Safe to
+re-run — nothing else is disturbed.
+
+**How it behaves**
+- Photos are **compressed on the phone before upload** (max 1600px, JPEG ~82%),
+  turning a typical 8MB camera photo into ~250-400KB. This matters: the free
+  tier's 5GB/month egress is the limit you'd hit first, not the 1GB storage.
+- **Offline-safe:** a photo taken with no signal is stored on the device
+  (IndexedDB) and shows immediately with an amber dot; it uploads by itself once
+  there's a connection or he signs in. Classroom wifi is exactly the case this
+  protects.
+- At ~300KB/photo, the free tier's 1GB holds roughly 3,000 photos — far beyond
+  what one student would ever use.
+- Deleting an image removes it locally, from the upload queue, and from cloud
+  storage.

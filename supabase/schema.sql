@@ -92,6 +92,33 @@ drop policy if exists "own push delete" on public.push_subscriptions;
 create policy "own push delete" on public.push_subscriptions
   for delete using (auth.uid() = user_id);
 
+-- ---------- task images (Supabase Storage) ----------
+-- Private bucket; each user can only touch files under their own user-id folder.
+-- Path convention: <user_id>/<task_id>/<image_id>.jpg
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('task-images', 'task-images', false, 5242880, array['image/jpeg','image/png','image/webp'])
+on conflict (id) do update
+  set file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "own images select" on storage.objects;
+create policy "own images select" on storage.objects
+  for select using (
+    bucket_id = 'task-images' and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "own images insert" on storage.objects;
+create policy "own images insert" on storage.objects
+  for insert with check (
+    bucket_id = 'task-images' and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "own images delete" on storage.objects;
+create policy "own images delete" on storage.objects
+  for delete using (
+    bucket_id = 'task-images' and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
 -- ============================================================
 --  Done. The app's storage-supabase.js reads/writes these tables.
 --  The daily-digest job (built later) will read action_log server-side.

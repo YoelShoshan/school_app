@@ -7,8 +7,10 @@ const I = {
   check:'<path d="M5 12l5 5L20 6"/>',
   cal:'<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 9h16M9 3v4M15 3v4"/>',
   trash:'<path d="M5 7h14M10 7V5h4v2M6 7l1 12h10l1-12"/>',
+  x:'<path d="M6 6l12 12M18 6L6 18"/>',
   inbox:'<path d="M4 13h4l2 3h4l2-3h4M5 6h14l1 7v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-5z"/>',
   download:'<path d="M12 4v10m0 0l-4-4m4 4l4-4M5 19h14"/>',
+  camera:'<path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2a1 1 0 0 0 .84-.46l.92-1.42A1 1 0 0 1 9.3 4.7h5.4a1 1 0 0 1 .84.42l.92 1.42a1 1 0 0 0 .84.46h2.2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/><circle cx="12" cy="12.5" r="3.2"/>',
   clock:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
   /* subject icons */
   triangle:'<path d="M12 4l8 15H4z"/>',
@@ -57,7 +59,8 @@ const ICON_CHOICES = ['triangle','sigma','integral','pi','calculator','compass',
 const APP_NAME = 'Compound V';   /* options you liked: 'SchoolNinja', 'SchoolHero', 'Skewl' */
 
 /* ====== Version — bump this on every release, and match CACHE in sw.js ====== */
-const APP_VERSION = '1.6.1';
+const APP_VERSION = '1.7.0';
+const MAX_IMAGES = 5;
 
 /* subject colors — value is the accent hex; the icon background is a soft tint of it */
 const COLORS = ['#7c9cff','#ff8f5e','#5bd6a0','#ffb454','#c77dff','#ff6b8a','#4fd0e3'];
@@ -221,6 +224,7 @@ function render(){
     if(ta){ ta.focus({preventScroll:false}); }
     nav.fresh = false;   // only auto-focus once, not on every re-render
   }
+  if(nav.screen==='detail') fillImages();
 }
 
 function header(title, {back=null, gear=false, sub=null}={}){
@@ -507,6 +511,16 @@ function Detail(){
         `}
       </div>
 
+      <div class="sectlabel">תמונות</div>
+      <div class="pad" style="padding-top:4px">
+        <div class="imgstrip" id="imgstrip"></div>
+        ${(t.images||[]).length < MAX_IMAGES ? `
+          <button class="btn ghost" onclick="pickImage('${t.id}')">${svg('camera')}הוספת תמונה</button>
+          <input type="file" id="imgInput" accept="image/*" capture="environment" style="display:none" onchange="onImagePicked('${t.id}', this)">
+          <div style="font-size:12px;color:var(--ink-faint);margin-top:6px">תמונה של הלוח, דף עבודה וכו'. עד ${MAX_IMAGES} תמונות.</div>
+        ` : `<div style="font-size:12.5px;color:var(--ink-faint)">הגעת למקסימום (${MAX_IMAGES} תמונות).</div>`}
+      </div>
+
       <div class="detailactions">
         <button class="backbtn" onclick="goBack()">${svg('chevR')}<span>חזרה למסך הראשי</span></button>
         <div class="donerow">
@@ -542,6 +556,81 @@ async function saveNotes(id){
   render(); toast('נשמר');
 }
 function autoGrow(el){ el.style.height='auto'; el.style.height=(el.scrollHeight)+'px'; }
+
+/* ---------- images ---------- */
+function pickImage(taskId){ document.getElementById('imgInput')?.click(); }
+
+async function onImagePicked(taskId, input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  input.value = '';                       // allow re-picking the same file
+  const t = TASKS.find(x=>x.id===taskId); if(!t) return;
+  t.images = t.images || [];
+  if(t.images.length >= MAX_IMAGES){ toast(`עד ${MAX_IMAGES} תמונות`); return; }
+  toast('מעבד תמונה…');
+  try{
+    const rec = await Store.addImage(taskId, file);
+    t.images.push({id:rec.id, localKey:rec.localKey, pending:true, addedAt:Date.now()});
+    await Store.saveTasks(TASKS);
+    logAction('image_add', t, {imageId:rec.id, size:rec.size});
+    render();
+    toast(Store.isSignedIn && Store.isSignedIn() ? 'נוספה' : 'נשמרה במכשיר · תעלה כשיהיה חיבור');
+  }catch(e){
+    toast('לא ניתן לטעון את התמונה');
+  }
+}
+
+// thumbnails are filled after render (URLs are async: signed remote or local blob)
+async function fillImages(){
+  const strip = document.getElementById('imgstrip');
+  if(!strip) return;
+  const t = TASKS.find(x=>x.id===nav.id);
+  const imgs = (t && t.images) || [];
+  if(!imgs.length){ strip.innerHTML=''; return; }
+  strip.innerHTML = imgs.map(im=>`
+    <div class="thumb" data-id="${im.id}">
+      <div class="thumbload"></div>
+      ${im.pending?'<span class="pendingdot" title="ממתינה להעלאה"></span>':''}
+    </div>`).join('');
+  for(const im of imgs){
+    const url = await Store.imageUrl(im, t.id);
+    const el = strip.querySelector(`.thumb[data-id="${im.id}"]`);
+    if(el && url){
+      el.style.backgroundImage = `url("${url}")`;
+      el.querySelector('.thumbload')?.remove();
+      el.onclick = ()=>viewImage(t.id, im.id, url);
+    }
+  }
+}
+
+function viewImage(taskId, imgId, url){
+  const wrap = document.createElement('div');
+  wrap.className = 'lightbox';
+  wrap.innerHTML = `
+    <img src="${url}" alt="">
+    <button class="lbclose" aria-label="סגירה">${svg('x')}</button>
+    <button class="lbdel">${svg('trash')} מחיקת התמונה</button>`;
+  wrap.onclick = (e)=>{ if(e.target===wrap) wrap.remove(); };
+  wrap.querySelector('.lbclose').onclick = ()=>wrap.remove();
+  wrap.querySelector('.lbdel').onclick = async ()=>{
+    wrap.remove();
+    await removeImage(taskId, imgId);
+  };
+  document.body.appendChild(wrap);
+}
+
+async function removeImage(taskId, imgId){
+  const t = TASKS.find(x=>x.id===taskId); if(!t || !t.images) return;
+  const img = t.images.find(i=>i.id===imgId); if(!img) return;
+  await Store.deleteImage(taskId, img);
+  t.images = t.images.filter(i=>i.id!==imgId);
+  await Store.saveTasks(TASKS);
+  logAction('image_remove', t, {imageId:imgId});
+  render(); toast('נמחקה');
+}
+
+// the storage layer calls this when a queued upload completes
+window.onImagesChanged = function(){ if(nav.screen==='detail') fillImages(); };
 
 /*
   buildDigest(dayStart, dayEnd) -> the object the daily email will render.

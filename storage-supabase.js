@@ -22,6 +22,7 @@ const Store = (() => {
   const KEY_SETTINGS = 'hw.settings.v1';
   const KEY_LOG = 'hw.log.v1';
   const KEY_QUEUE = 'hw.syncqueue.v1';      // pending pushes when offline
+  const KEY_IMGQUEUE = 'hw.imgqueue.v1';    // pending image uploads (blobs in IndexedDB)
   const KEY_LOGCURSOR = 'hw.logpushed.v1';  // how many log entries already pushed
   const LOG_CAP = 2000;
 
@@ -141,6 +142,7 @@ const Store = (() => {
   async function onSignedIn(){
     await pullRemote();
     await flush();
+    uploadPending();   // any photos taken while offline / signed out
     if(typeof window.onAuthChanged==='function') window.onAuthChanged(currentUser());
     if(typeof window.afterSync==='function') window.afterSync();
   }
@@ -149,12 +151,101 @@ const Store = (() => {
   }
 
   if(typeof window!=='undefined'){
-    window.addEventListener('online', ()=>scheduleFlush(200));
+    window.addEventListener('online', ()=>{ scheduleFlush(200); uploadPending(); });
     // kick off auth once supabase script is present
     if(configured){ (window.supabaseReady || Promise.resolve()).then(initAuth); }
   }
 
   // ---------- public API (same names as before) ----------
+  // ---------- images: IndexedDB queue + Supabase Storage ----------
+  /*
+    Images are too big for localStorage, so pending ones live in IndexedDB.
+    Flow: compress -> store blob locally (instantly visible) -> queue upload ->
+    upload when online -> replace local record with the remote path.
+    This keeps the local-first promise: he can photograph the board in a
+    classroom with no signal and it uploads later, on its own.
+  */
+  const IDB_NAME = 'hw-images';
+  const IDB_STORE = 'blobs';
+  function idb(){
+    return new Promise((res, rej)=>{
+      const r = indexedDB.open(IDB_NAME, 1);
+      r.onupgradeneeded = ()=>{ const db=r.result; if(!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE); };
+      r.onsuccess = ()=>res(r.result);
+      r.onerror = ()=>rej(r.error);
+    });
+  }
+  async function idbPut(key, val){
+    const db = await idb();
+    return new Promise((res,rej)=>{
+      const tx = db.transaction(IDB_STORE,'readwrite');
+      tx.objectStore(IDB_STORE).put(val, key);
+      tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error);
+    });
+  }
+  async function idbGet(key){
+    const db = await idb();
+    return new Promise((res,rej)=>{
+      const tx = db.transaction(IDB_STORE,'readonly');
+      const rq = tx.objectStore(IDB_STORE).get(key);
+      rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error);
+    });
+  }
+  async function idbDel(key){
+    const db = await idb();
+    return new Promise((res,rej)=>{
+      const tx = db.transaction(IDB_STORE,'readwrite');
+      tx.objectStore(IDB_STORE).delete(key);
+      tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error);
+    });
+  }
+
+  // Shrink a camera photo to something sensible before it ever leaves the phone.
+  // A whiteboard stays legible at 1600px; this turns ~8MB into ~250-400KB, which
+  // saves his upload time, our storage, and (mostly) the egress budget.
+  async function compressImage(file, maxDim = 1600, quality = 0.82){
+    const bitmap = await createImageBitmap(file);
+    let {width, height} = bitmap;
+    if(Math.max(width,height) > maxDim){
+      const s = maxDim / Math.max(width,height);
+      width = Math.round(width*s); height = Math.round(height*s);
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = width; canvas.height = height;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height);
+    bitmap.close && bitmap.close();
+    return new Promise(res => canvas.toBlob(b=>res(b), 'image/jpeg', quality));
+  }
+
+  async function uploadPending(){
+    if(!sb || !userId) return;
+    if(typeof navigator!=='undefined' && navigator.onLine===false) return;
+    const q = read(KEY_IMGQUEUE, []);
+    if(!q.length) return;
+    const remaining = [];
+    for(const item of q){
+      try{
+        const blob = await idbGet(item.localKey);
+        if(!blob){ continue; }   // gone; drop silently
+        const path = `${userId}/${item.taskId}/${item.id}.jpg`;
+        const { error } = await sb.storage.from('task-images').upload(path, blob, {contentType:'image/jpeg', upsert:true});
+        if(error) throw error;
+        // mark uploaded on the task record
+        const tasks = read(KEY_TASKS, []);
+        const t = tasks.find(x=>x.id===item.taskId);
+        if(t && t.images){
+          const img = t.images.find(i=>i.id===item.id);
+          if(img){ img.path = path; img.pending = false; }
+          write(KEY_TASKS, tasks);
+          enqueue({type:'state', key:'tasks', value:tasks});
+        }
+        await idbDel(item.localKey);
+        if(typeof window.onImagesChanged==='function') window.onImagesChanged();
+      }catch(e){ remaining.push(item); }   // keep for retry
+    }
+    write(KEY_IMGQUEUE, remaining);
+  }
+
   return {
     // capability flags for the UI
     syncEnabled(){ return configured; },
@@ -195,6 +286,47 @@ const Store = (() => {
       enqueue({type:'log'});
     },
     async getLog(){ return read(KEY_LOG, []); },
+
+    /* ---------- images ---------- */
+    imagesSupported(){ return typeof indexedDB !== 'undefined'; },
+
+    // Add a photo to a task: compress, keep locally (instant), queue the upload.
+    async addImage(taskId, file){
+      const blob = await compressImage(file);
+      const id = 'img_' + Math.random().toString(36).slice(2,10);
+      const localKey = `${taskId}/${id}`;
+      await idbPut(localKey, blob);
+      const q = read(KEY_IMGQUEUE, []);
+      q.push({id, taskId, localKey});
+      write(KEY_IMGQUEUE, q);
+      uploadPending();                       // fire and forget; retries later
+      return {id, localKey, pending:true, size: blob.size};
+    },
+
+    // Return a displayable URL for an image (local blob if pending, else signed remote URL).
+    async imageUrl(img, taskId){
+      if(img.path && sb && userId){
+        try{
+          const { data, error } = await sb.storage.from('task-images').createSignedUrl(img.path, 3600);
+          if(!error && data) return data.signedUrl;
+        }catch(_){}
+      }
+      // fall back to the local copy (offline, or not yet uploaded)
+      const blob = await idbGet(img.localKey || `${taskId}/${img.id}`);
+      return blob ? URL.createObjectURL(blob) : null;
+    },
+
+    async deleteImage(taskId, img){
+      try{ await idbDel(img.localKey || `${taskId}/${img.id}`); }catch(_){}
+      const q = read(KEY_IMGQUEUE, []).filter(x=>x.id!==img.id);
+      write(KEY_IMGQUEUE, q);
+      if(img.path && sb && userId){
+        try{ await sb.storage.from('task-images').remove([img.path]); }catch(_){}
+      }
+    },
+
+    pendingImageCount(){ return read(KEY_IMGQUEUE, []).length; },
+    async syncImages(){ await uploadPending(); },
 
     // let the app trigger a manual sync (e.g. pull-to-refresh) if desired
     async syncNow(){ await pullRemote(); await flush(); },

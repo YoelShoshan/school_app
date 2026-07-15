@@ -1,7 +1,7 @@
 // Bump this string on every deploy to force a fresh cache.
 // Keep this in sync with APP_VERSION in app.js — bumping it forces all clients
 // to fetch fresh files instead of serving the old cached build.
-const VERSION = '1.6.1';
+const VERSION = '1.7.0';
 const CACHE = 'compound-v-' + VERSION;
 const ASSETS = ['index.html','styles.css','config.js','storage-supabase.js','app.js','manifest.json','icon-192.png','icon-512.png'];
 
